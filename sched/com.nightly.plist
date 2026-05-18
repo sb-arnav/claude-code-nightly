@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  macOS launchd unit for NIGHTLY. Install with:
+    cp com.nightly.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/com.nightly.plist
+
+  Adjust ProgramArguments[1] if your `claude` CLI is at a different path
+  (run `which claude` to check). The default assumes a typical macOS install.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.nightly</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>-c</string>
+    <string>cd "$HOME" && /usr/local/bin/claude -p '/nightly' &gt;&gt; "$HOME/.claude/nightly/logs/cron.log" 2&gt;&amp;1</string>
+  </array>
+
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>22</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+  </dict>
+
+  <key>StandardOutPath</key>
+  <string>/tmp/nightly.stdout</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/nightly.stderr</string>
+
+  <key>RunAtLoad</key>
+  <false/>
+</dict>
+</plist>
