@@ -1,0 +1,48 @@
+# NIGHTLY in GitHub Actions — runs in the cloud on a free-tier schedule.
+#
+# Drop this file at .github/workflows/nightly.yml in a private repo that holds
+# a copy of your ~/.claude/ directory. Add a secret ANTHROPIC_API_KEY.
+#
+# This is a sketch — the loop assumes write access to the substrate, so you'll
+# need to commit kept changes back to the repo via a deploy key or app token.
+
+name: nightly
+on:
+  schedule:
+    - cron: '0 16 * * *'  # 22:00 IST = 16:30 UTC; round to 16:00 for free tier
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.NIGHTLY_PUSH_TOKEN }}
+
+      - name: Restore ~/.claude
+        run: |
+          cp -r ./dot-claude ~/.claude
+
+      - name: Install Claude CLI
+        run: |
+          curl -fsSL https://claude.ai/install.sh | bash
+          claude --version
+
+      - name: Run nightly
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          claude -p '/nightly'
+
+      - name: Commit kept changes
+        run: |
+          if [[ -n "$(git -C ~/.claude log --oneline HEAD@{1}..HEAD 2>/dev/null)" ]]; then
+            cp -r ~/.claude ./dot-claude
+            git config user.email "nightly@actions"
+            git config user.name "nightly"
+            git add -A
+            git commit -m "nightly: $(date -I) automated improvement"
+            git push
+          fi

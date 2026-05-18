@@ -1,0 +1,21 @@
+# Local development artifacts that should NEVER be committed to a public repo.
+
+# Python
+__pycache__/
+*.pyc
+
+# Editor/OS
+.DS_Store
+*.swp
+*.tmp
+
+# User-data (in case anyone develops in-place at ~/.claude/plugins/nightly/)
+# All data lives at ~/.claude/nightly/ (outside this plugin dir), but be safe:
+**/corpus.jsonl
+**/benchmark.jsonl
+**/benchmarks/
+**/experiments/
+**/experiment-log.jsonl
+**/dead-letter.jsonl
+**/reports/
+**/logs/
