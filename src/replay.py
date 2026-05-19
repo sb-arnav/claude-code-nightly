@@ -248,7 +248,7 @@ def main() -> int:
         }
         if parsed.get("_returncode") is not None:
             response["_replay_returncode"] = parsed["_returncode"]
-        (args.run_dir / f"{bid}.json").write_text(json.dumps(response, indent=2))
+        (args.run_dir / f"{bid}.json").write_text(json.dumps(response, indent=2), encoding="utf-8")
 
         summary["per_task"].append({
             "benchmark_id": bid,
@@ -261,7 +261,7 @@ def main() -> int:
 
     summary["total_cost_usd"] = round(summary["total_cost_usd"], 4)
     summary_path = args.run_dir.parent / "replay-summary.json"
-    summary_path.write_text(json.dumps(summary, indent=2))
+    summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
 
     print(f"replay: attempted={summary['n_attempted']} "
           f"completed={summary['n_completed']} "

@@ -185,7 +185,7 @@ def main() -> int:
         # doesn't die. /nightly will skip replay until the corpus matures.
         today = datetime.now(tz=timezone.utc).date().isoformat()
         out = args.out_dir / f"benchmark-{today}.jsonl"
-        out.write_text("")
+        out.write_text("", encoding="utf-8")
         if LATEST.is_symlink() or LATEST.exists():
             LATEST.unlink()
         LATEST.symlink_to(out)

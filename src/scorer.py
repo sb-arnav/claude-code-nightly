@@ -282,7 +282,7 @@ def main() -> int:
     }
     blob = json.dumps(aggregate, indent=2)
     if args.out:
-        args.out.write_text(blob)
+        args.out.write_text(blob, encoding="utf-8")
     else:
         print(blob)
     return 0

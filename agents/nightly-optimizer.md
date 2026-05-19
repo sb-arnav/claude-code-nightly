@@ -146,16 +146,29 @@ Reads `variance.json`. The key field is `noise_threshold_1_5_sigma` — Δ small
 
 Free to run — no token spend, just re-runs the cheap mechanical scorer on subsamples.
 
-### 6. Compare to baseline
-Read `experiment-log.jsonl`. Walk entries newest-first. Find the **latest entry with `decision == "kept"` or `decision == "first-real-baseline"`** — that's the comparison baseline.
+### 6. Decide — mechanical, NOT prose
 
-**Sanity floor (always applied):** if `score_mean < 0.5`, the loop is producing garbage — either the proposer is broken, the replay path is failing, or the scorer is misconfigured. **Do NOT enshrine.** Revert, log `decision: "sanity-floor-rejected"` with `notes` describing what was tried, and write a report explicitly flagging the failure. Loop will retry tomorrow; if three consecutive sanity-floor rejections occur, abort future runs until the user investigates.
+Invoke `decide.py`. **The agent does not compute the decision; the agent executes whatever decide.py returns.** This is the load-bearing mechanical-gate enforcement — prose-based gating is too easy to misread for borderline numbers.
 
-- If only `decision == "seed"` exists (synthetic bootstrap from `baseline.py`): this is the first real run. Skip the comparison, **keep IF score ≥ 0.5** (sanity floor), mark `decision: "first-real-baseline"`. The synthetic seed is intentionally near-perfect and would make every real run look like a regression — that's why we don't compare against it. But we still gate on the sanity floor so a broken loop doesn't enshrine a 0.2 baseline that future runs trivially beat.
-- If a real baseline exists:
-  - `score_mean - baseline >= 0.02`: **keep**.
-  - `score_mean - baseline <= -0.02`: **revert**.
-  - Otherwise (marginal): **hold** — revert this run but log it so the dead-letter list can prevent re-trying the same `(strategy, target_file)` without bigger effect-size.
+```bash
+python3 ~/.claude/nightly/decide.py --run-dir ~/.claude/nightly/experiments/<run_id>
+```
+
+Add `--skip-judge` if step 5b was skipped (dry-run mode), `--skip-variance` if step 5c was skipped. Auto-commit vs observation mode is detected from `~/.claude/nightly/auto-commit.yes`.
+
+The script reads `score.json`, `judge-scores.json`, `variance.json`, walks `experiment-log.jsonl` to find the prior baseline, applies the four gates (Δ floor, variance significance, judge composite, judge completeness), and emits a JSON decision to stdout. It also writes `<run-dir>/decision.json` for the report.
+
+Possible decisions the agent will see (just look at `decision`, the gates_passed / gates_failed / reason fields are for the report):
+- `kept` — auto-commit, all gates passed → commit
+- `first-real-baseline` — no prior baseline, score ≥ sanity floor → commit (auto-commit) / propose (observation)
+- `reverted` — Δ ≤ −0.02 → git reset
+- `delta-below-floor` — |Δ| < 0.02 → git reset, hold (dead-letter)
+- `noise-rejected` — Δ within 1.5σ of variance → git reset
+- `judge-rejected` — judge composite < 0.6 or too many judge failures → git reset
+- `sanity-floor-rejected` — score < 0.5 → git reset, flag run
+- `proposed-kept` / `proposed-reverted` — observation mode; always git reset; write to `proposed/` for user review
+- `gates-missing` — judge or variance signal wasn't computed but is required → revert + log it
+- `error` — score.json missing or unreadable → fail loud
 
 ### 6b. Check the dead-letter list
 Before applying decision, read `~/.claude/nightly/dead-letter.jsonl` if it exists. If the *proposed* `(strategy, target_file)` matches any entry, this run's change was already tried and rejected (either auto-held or `/nightly disapprove`d by the user). Revert and log `decision: "deadletter-blocked"` — do not retry the same change.

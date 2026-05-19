@@ -148,7 +148,7 @@ def main() -> int:
     }
 
     out = args.run_dir.parent / "variance.json"
-    out.write_text(json.dumps(result, indent=2))
+    out.write_text(json.dumps(result, indent=2), encoding="utf-8")
 
     print(f"variance: n={result['n_samples_valid']} mean={result['mean']} "
           f"stdev={result['stdev']} range=[{result['min']}..{result['max']}]")

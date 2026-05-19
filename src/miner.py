@@ -284,7 +284,7 @@ def main() -> int:
         # corpus and exit 0 so install.sh doesn't die on `set -euo pipefail`.
         # The loop will start producing useful eval data as the user accumulates
         # sessions; miner can be re-run anytime via `nightly/miner.py`.
-        tmp.write_text("")
+        tmp.write_text("", encoding="utf-8")
         tmp.replace(args.out)
         if not args.quiet:
             print(f"projects dir not found: {args.projects_dir}")

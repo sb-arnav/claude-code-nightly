@@ -257,7 +257,7 @@ def main() -> int:
     ROLLUP_DIR.mkdir(parents=True, exist_ok=True)
     today = datetime.now(tz=timezone.utc).date().isoformat()
     out_path = args.out or (ROLLUP_DIR / f"weekly-{today}.md")
-    out_path.write_text(report)
+    out_path.write_text(report, encoding="utf-8")
     print(report)
     print()
     print(f"wrote: {out_path}", flush=True)
