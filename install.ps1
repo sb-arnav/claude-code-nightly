@@ -163,6 +163,7 @@ nightly/approve.py
 nightly/reject.py
 nightly/replay.py
 nightly/judge.py
+nightly/variance.py
 nightly/proposed/
 
 # misc
