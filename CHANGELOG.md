@@ -2,6 +2,17 @@
 
 All notable changes to NIGHTLY are recorded here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.1] — 2026-05-19
+
+### Fixed
+- `replay.py` and `judge.py` now invoke `claude -p --bare` instead of plain `claude -p`. `--bare` skips hooks, LSP, plugin sync, attribution, auto-memory, background prefetches, keychain reads, and CLAUDE.md auto-discovery. Two reasons this matters:
+  1. **Without `--bare`, replay recursively loads this plugin's `SessionStart` hook.** Every replay invocation would print the NIGHTLY surface banner into stdout, contaminating the parsed JSON response. (Subtle bug — the banner only appears for unread reports, but a fresh replay environment would always see "unread.")
+  2. **Replay is supposed to measure the substrate change in isolation.** With auto-CLAUDE.md and auto-memory active, every replay re-pulls fresh context the substrate would normally have — confounding what the change actually did. `--bare` keeps the eval honest.
+
+Same applies to the judge: it should be a clean evaluator, not an evaluator carrying its own substrate state.
+
+
+
 ## [0.9.0] — 2026-05-19
 
 The final methodology gap from the reviewer's list: **correction-weighted ground truth**. All 5/5 named critiques now have code AND are gated into the keep decision.

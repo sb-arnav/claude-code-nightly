@@ -138,8 +138,15 @@ def replay_one(prompt: str, model: str, max_budget: float, max_turns: int,
                timeout_sec: int) -> tuple[dict, float, float]:
     """Returns (parsed_response, duration_sec, cost_usd_estimate)."""
     start = time.monotonic()
+    # --bare: skip hooks, LSP, plugin sync, attribution, auto-memory, background
+    # prefetches, keychain reads, and CLAUDE.md auto-discovery. Critical here for
+    # two reasons: (1) without it, replaying recursively loads this plugin's
+    # SessionStart hook, slowing every replay and potentially printing the
+    # NIGHTLY surface banner into the response text; (2) replay is supposed to
+    # measure the *substrate change* in isolation — auto-memory + auto-CLAUDE.md
+    # would confound that by re-pulling fresh context Claude would normally have.
     cmd = [
-        "claude", "-p",
+        "claude", "-p", "--bare",
         "--model", model,
         "--output-format", "json",
         "--max-turns", str(max_turns),
