@@ -40,6 +40,14 @@ These are synthetic (the real ones live on your machine at `~/.claude/nightly/re
 
 ## Install
 
+> **Methodology caveat** (read before scheduling). v0.2 uses six regex/heuristic signals over historical replay. Honest limits:
+> - **Ground truth is "what the past assistant did", not "what should have happened."** Optimizing toward replay similarity can entrench past mistakes.
+> - **All six signals are surface heuristics.** A CLAUDE.md edit that simply forbids the trigger phrases (`feels balanced`, `in summary`, `Option A/B/C`) would score great without improving reasoning. Goodhart is the failure mode.
+> - **The Δ ≥ +0.02 keep threshold is below noise** without variance estimation or repeated trials. A "kept" decision and a "reverted" decision a week apart could be the same proposal with different sampling luck.
+> - **Replay model ≠ production model.** Haiku replay matching Sonnet ground truth ≠ Sonnet got better.
+>
+> Therefore: **observation mode is the default**. The loop proposes changes and scores them but does not commit them. You review and `/nightly approve` or `/nightly reject`. Auto-commit is opt-in via `touch ~/.claude/nightly/auto-commit.yes`, and is not recommended at v0.2. v0.3 will add LLM-as-judge agreement, multi-trial variance, and correction-weighted scoring — gate auto-commit on those.
+
 ```bash
 git clone https://github.com/sb-user/claude-code-nightly ~/.claude/plugins/nightly
 bash ~/.claude/plugins/nightly/install.sh
@@ -152,6 +160,15 @@ Exit 3 → the run is auto-reverted, the `(strategy, target_file)` pair gets dea
 - [`VoidLight00/autoimprove-cc`](https://github.com/VoidLight00/autoimprove-cc) — closest Claude-Code-native artifact. Optimizes a single SKILL.md against hand-written `eval.json` assertions. NIGHTLY's gap closure: the eval is auto-built from your session history.
 - [`cgraves09/autoskill`](https://github.com/cgraves09/autoskill) — Karpathy loop applied to one skill at a time with named mutation operators. NIGHTLY borrows the `strategy_stats.py` effectiveness-tracking pattern and the `safety_check.py` minimum-line-count guard from their published FINDINGS.md (60+ iterations, 45% → 90% on a real skill).
 - `compound-engineering:ce-optimize` skill — full Karpathy loop with worktree isolation, persistence, judge mode. NIGHTLY cribs its append-only-log discipline and keep/revert decision shape, not the 659-line scaffolding.
+
+### Adjacent academic / framework prior art
+
+- **Reflexion** (Shinn et al., 2023) — same modify→verify→keep loop shape applied to agent trajectories. Self-reflection on failed runs → stored memory → next attempt. NIGHTLY's `corrections.jsonl` → `proposed_rule` → next-night proposer pipeline is structurally similar; Reflexion's scoring is task-success, NIGHTLY's is replay-similarity (weaker signal, which the v0.2 caveat above acknowledges).
+- **DSPy + MIPRO / OPRO** (Stanford) — automatic prompt optimization with bootstrapped few-shot examples and a real labeled metric. Closer to the "rigorous" version of what NIGHTLY does, but needs labeled examples. NIGHTLY trades the labeling burden for a weaker auto-mined signal — the open methodology gap.
+- **Trace** (Microsoft, [`microsoft/trace`](https://github.com/microsoft/trace)) — generalized backprop-through-LLM-agents that optimizes any text parameter against a metric. NIGHTLY is a narrow instance with a fixed metric and a fixed parameter space (the substrate).
+- **Anthropic claude-cookbooks agent evals** + **OpenAI evals** — reference patterns for grading agent outputs with LLM-as-judge. NIGHTLY's v0.3 plan adopts the judge pattern; until then, the scorer is mechanical and the methodology caveat above stands.
+
+NIGHTLY's distinct claim across all of these remains: **the eval suite is auto-mined from the user's own session history.** None of the above mine the eval from session traces. Whether that novelty is worth the ground-truth weakness it introduces is the open question — answer empirically by running in observation mode and reviewing proposals.
 
 ## Files
 
