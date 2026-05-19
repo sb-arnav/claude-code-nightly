@@ -2,6 +2,15 @@
 
 All notable changes to NIGHTLY are recorded here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.1] — 2026-05-19
+
+### Added
+- `verify.sh` — post-install smoke test that exercises every component without spending tokens. Runs miner/benchmark presence, scorer composition, strategy_stats, safety_check, snapshot, weekly_rollup, and hook syntax. Exit 0 = ready to schedule. Catches install drift before the first cron fire.
+
+### Fixed
+- `verify.sh` immediately surfaced a real bug: `snapshot.sh` was refusing to commit because several runtime paths (`.credentials.json`, `mcp-needs-auth-cache.json`, `security_warnings_state_*.json`, plugin-symlinks at `nightly/*.py`) weren't in `.gitignore`. The substrate's working tree would have been dirty on every cron fire, aborting the loop. Fixed in `install.sh`'s generated `.gitignore`.
+- `snapshot.sh` autosafe list now includes `nightly/experiment-log.jsonl`, `nightly/dead-letter.jsonl`, and `nightly/reports/` — those are substrate-evolution data the loop is supposed to auto-commit between runs.
+
 ## [0.4.0] — 2026-05-19
 
 ### Added
