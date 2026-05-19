@@ -31,6 +31,13 @@ disapprove (if you disagree): /nightly disapprove <run_id> "<reason>"
 
 If you disagree with the change it kept, you veto it. Your veto becomes a `corrections.jsonl` entry **in your voice** plus a dead-letter entry that prevents the loop from ever proposing the same change again.
 
+## What it looks like in practice
+
+- **A morning report** after each nightly run: [`docs/example-morning-report.md`](docs/example-morning-report.md)
+- **A weekly rollup** showing trend, kept changes with diffs, and per-strategy effectiveness: [`docs/example-weekly-rollup.md`](docs/example-weekly-rollup.md)
+
+These are synthetic (the real ones live on your machine at `~/.claude/nightly/reports/`), but show the actual output shape you'll see after a week of runs.
+
 ## Install
 
 ```bash
