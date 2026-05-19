@@ -116,22 +116,46 @@ ${NIGHTLY_MARK} — do not edit between markers; nightly install regenerates thi
 # volatile session/cache state (rewritten every Claude Code session)
 projects/
 todos/
+sessions/
+tasks/
 shell-snapshots/
+file-history/
+paste-cache/
+session-env/
+history.jsonl
+learning/
 
-# plugin / marketplace caches (re-fetchable)
-plugins/marketplaces/
-plugins/installed-plugins-cache.json
-
-# telemetry / IDE state
+# caches / telemetry
+cache/
+downloads/
+backups/
+telemetry/
 statsig/
 ide/
+.credentials.json
+mcp-needs-auth-cache.json
+security_warnings_state_*.json
+*.bak.*
 
-# nightly per-run scratch (small reports stay, big logs are gitignored)
+# plugins are re-installable; not tracked as substrate
+plugins/
+
+# nightly per-run scratch (reports + experiment-log kept, big artifacts ignored)
 nightly/experiments/
 nightly/logs/
 nightly/corpus.jsonl
 nightly/benchmark.jsonl
 nightly/benchmarks/
+# plugin sources symlinked into nightly/ (sources live in plugins/ which is ignored)
+nightly/miner.py
+nightly/benchmark.py
+nightly/scorer.py
+nightly/baseline.py
+nightly/disapprove.py
+nightly/snapshot.sh
+nightly/strategy_stats.py
+nightly/safety_check.py
+nightly/weekly_rollup.py
 
 # misc
 *.tmp

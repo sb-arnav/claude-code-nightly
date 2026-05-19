@@ -23,7 +23,11 @@ AUTOSAFE=(
   "memory/"
   "corrections.jsonl"
   "session-state.md"
-  "projects/-home-arnav/memory/"  # gitignored anyway, kept for clarity
+  "projects/-home-arnav/memory/"        # gitignored anyway, kept for clarity
+  "nightly/experiment-log.jsonl"        # loop's own append-only log
+  "nightly/dead-letter.jsonl"           # loop's own deadletter log
+  "nightly/reports/"                    # morning + weekly reports (audit trail)
+  ".last-cleanup"                       # workspace cleanup timestamp
 )
 
 # What's currently dirty?
