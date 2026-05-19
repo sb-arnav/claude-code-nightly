@@ -168,6 +168,7 @@ nightly/safety_check.py
 nightly/weekly_rollup.py
 nightly/approve.py
 nightly/reject.py
+nightly/replay.py
 nightly/proposed/
 
 # misc

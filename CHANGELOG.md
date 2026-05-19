@@ -2,6 +2,19 @@
 
 All notable changes to NIGHTLY are recorded here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.1] — 2026-05-19
+
+### Added
+- `src/replay.py` — the actual benchmark replay path. Until v0.6.1, the agent doc *described* the replay step ("Run headless: claude -p --model haiku --max-turns 12 ...") but no code implemented it; the loop was end-to-end testable only in dry-run mode. `replay.py` now handles the per-task subprocess loop with `--output-format json`, parses the structured output, applies per-task budget caps via `--max-budget-usd`, total-budget caps in the runner, per-task timeouts, deterministic subsampling via seed, and writes both per-task response files and a `replay-summary.json` with cost/duration/completion stats.
+
+### Changed
+- Agent doc workflow step 4 now invokes `replay.py` concretely instead of describing the action. The `--dry-run` synthesis path still exists for testing without token spend.
+
+### Why this matters
+Closes the single biggest "untested in production" gap. Before: loop ran fine in dry-run; nobody knew if the real path would work. After: the real path is a single Python invocation with caps, timeouts, and structured output — much easier to reason about and to fail safely.
+
+
+
 ## [0.6.0] — 2026-05-19
 
 Windows support. NIGHTLY now runs natively on Windows in addition to macOS / Linux / WSL.
