@@ -2,6 +2,26 @@
 
 All notable changes to NIGHTLY are recorded here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.0] — 2026-05-19
+
+Windows support. NIGHTLY now runs natively on Windows in addition to macOS / Linux / WSL.
+
+### Added
+- `install.ps1` — PowerShell port of `install.sh`. Detects Windows paths, *copies* (not symlinks) plugin scripts into `~\.claude\nightly\` so Dev Mode isn't required, git-inits the substrate with a Windows-aware `.gitignore`, mines history, seeds the baseline, prints Task Scheduler snippets.
+- `verify.ps1` — PowerShell port of the post-install verifier.
+- `src/snapshot.ps1` — PowerShell port of the pre-run snapshot script.
+- `tests/run.ps1` — PowerShell port of the test suite. Builds synthetic fixtures in `$env:TEMP`, exercises every Python script.
+- `sched/nightly-task.xml` — Task Scheduler unit. Import via the Task Scheduler GUI or `Register-ScheduledTask -Xml`.
+- `hooks/nightly-surface.py` — cross-platform Python version of the SessionStart hook (replaces the bash-only version in `plugin.json`).
+
+### Changed
+- `plugin.json` SessionStart hook now invokes `python3 hooks/nightly-surface.py` instead of `bash hooks/nightly-surface.sh`. The bash hook is retained on disk for users who prefer it; the manifest just points at the Python file because Python is the only runtime guaranteed everywhere the plugin lands.
+- `install.sh`'s generated `.gitignore` now covers the new symlink targets (`approve.py`, `reject.py`, `proposed/`) and the PowerShell scripts (`snapshot.ps1`).
+- README "Supported platforms" table updated — Windows moved from ✗ to ✓.
+
+### Honest limit
+PowerShell scripts are syntax-checked by inspection only — no `pwsh` available on the dev machine for live validation (system-wide install was blocked as out-of-scope). Windows CI on a real runner is the v0.7 step. If anything breaks on a fresh Windows install, file a GitHub issue and it'll be a fast turnaround.
+
 ## [0.5.0] — 2026-05-19
 
 External review of v0.4.x landed a substantive methodology critique (6/10 engineering, 4/10 as something to actually run nightly). All five points were correct: ground truth is "what happened" not "what should have happened"; the six scored signals are gameable regex heuristics; Δ ≥ +0.02 is below noise without variance estimation; replay model ≠ production model; auto-mining trades the labeling problem for a weaker signal.
