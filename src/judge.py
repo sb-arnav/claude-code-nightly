@@ -163,9 +163,14 @@ def build_judge_prompt(benchmark_entry: dict, response: dict) -> str:
 
 
 def call_judge(prompt: str, model: str, max_budget: float, timeout_sec: int) -> tuple[dict | None, float]:
-    """Call claude -p to score one (prompt, response) pair. Returns (parsed_scores_or_None, cost_usd)."""
+    """Call claude -p to score one (prompt, response) pair. Returns (parsed_scores_or_None, cost_usd).
+
+    Uses --bare so the judge doesn't recursively load this plugin's
+    SessionStart hook or auto-pull CLAUDE.md context — the judge needs a
+    clean evaluator without substrate state.
+    """
     cmd = [
-        "claude", "-p",
+        "claude", "-p", "--bare",
         "--model", model,
         "--output-format", "json",
         "--max-budget-usd", f"{max_budget:.2f}",
