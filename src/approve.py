@@ -29,6 +29,15 @@ import json
 import re
 import subprocess
 import sys
+
+# Force UTF-8 stdio on Windows where Python defaults to cp1252; without this,
+# print() of any Unicode (em-dash, arrows, smart quotes — i.e. most Claude
+# output) crashes with UnicodeEncodeError. Idempotent and safe on all platforms.
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+except (AttributeError, ValueError):
+    pass
 from datetime import datetime, timezone
 from pathlib import Path
 
