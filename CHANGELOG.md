@@ -2,6 +2,25 @@
 
 All notable changes to NIGHTLY are recorded here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.0] — 2026-05-19
+
+External review of v0.4.x landed a substantive methodology critique (6/10 engineering, 4/10 as something to actually run nightly). All five points were correct: ground truth is "what happened" not "what should have happened"; the six scored signals are gameable regex heuristics; Δ ≥ +0.02 is below noise without variance estimation; replay model ≠ production model; auto-mining trades the labeling problem for a weaker signal.
+
+This release acts on the reviewer's specific recommendation: **don't auto-commit until v0.3 lands a real judge + variance + correction-weighted scoring**.
+
+### Changed (breaking)
+- **Observation mode is now the default.** The loop proposes changes, scores them, and reverts. Proposals land at `~/.claude/nightly/proposed/<run_id>.md` with the full diff + score breakdown. Auto-commit only when the user explicitly opts in by creating the marker file `~/.claude/nightly/auto-commit.yes`. The agent doc now documents both modes and explains why observation is the default.
+
+### Added
+- `src/approve.py` + `/nightly approve <run_id>` — re-apply a proposed diff, run safety_check, commit with the right author email.
+- `src/reject.py` + `/nightly reject <run_id> "<reason>"` — dead-letter the (strategy, target) pair AND write a correction entry so the proposer learns; symmetric to `disapprove` but for observation-mode proposals that were never committed.
+- `/nightly list-proposals` — show pending observation-mode proposals.
+- README "Methodology caveat" section — names the four honest limits of v0.2 scoring upfront so users see them before scheduling.
+- README cites adjacent academic prior art the reviewer named: Reflexion (Shinn et al., 2023), DSPy MIPRO/OPRO, Microsoft's Trace, Anthropic claude-cookbooks agent evals patterns. None of these auto-mine the eval suite from session history; that remains NIGHTLY's distinct claim, and now the README is explicit that it's a "defensible bet to try" not a "proven approach."
+
+### Why this version is honest
+A 6/10 / 4/10 review with no defensive response is healthier than 100 stars on a tool nobody should run unobserved. v0.5.0 doesn't add LLM-as-judge yet — that's still v0.6 work — but it stops the loop from auto-mutating substrate while the methodology is being firmed up.
+
 ## [0.4.3] — 2026-05-19
 
 Fresh-install regression pass, prompted by a thorough external test report (WSL Ubuntu 24.04). All four reported bugs reproduced and fixed.

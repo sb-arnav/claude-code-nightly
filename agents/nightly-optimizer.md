@@ -135,8 +135,19 @@ Read `experiment-log.jsonl`. Walk entries newest-first. Find the **latest entry 
 Before applying decision, read `~/.claude/nightly/dead-letter.jsonl` if it exists. If the *proposed* `(strategy, target_file)` matches any entry, this run's change was already tried and rejected (either auto-held or `/nightly disapprove`d by the user). Revert and log `decision: "deadletter-blocked"` — do not retry the same change.
 
 ### 7. Apply decision
+
+**Two modes**, gated by the presence of `~/.claude/nightly/auto-commit.yes`:
+
+**Default — observation mode** (auto-commit marker file absent):
+- Regardless of decision (`keep`, `revert`, `held`), **always revert** the change with `git reset --hard <baseline_commit>`. NIGHTLY never mutates substrate without user review while in this mode.
+- Write the proposal, diff, and score to `~/.claude/nightly/proposed/<run_id>.md` so the user can review and manually approve via `/nightly approve <run_id>` (which re-applies the change and commits with the correct author email).
+- Mark the experiment-log `decision: "proposed-<original_decision>"` (e.g. `proposed-kept`, `proposed-reverted`) so the audit trail shows what the loop WOULD have done.
+
+**Auto-commit mode** (user explicitly opted in by creating `~/.claude/nightly/auto-commit.yes`):
 - **Keep**: `cd ~/.claude && git commit -m "nightly <run_id>: <strategy> — score <baseline> → <new> (+<delta>)"`.
 - **Revert / hold**: `cd ~/.claude && git reset --hard <baseline_commit>`.
+
+**Why observation mode is the default:** v0.2 scoring uses six regex heuristics over historical replay. The signals are gameable (e.g. a CLAUDE.md edit that forbids "feels balanced" trivially scores higher without improving reasoning), the Δ ≥ +0.02 threshold is below noise without variance estimation, and ground truth is "what the historical assistant did", not "what should have happened". Until v0.3 adds LLM-as-judge + multi-trial variance + correction-weighted scoring, NIGHTLY should propose changes, not commit them.
 
 ### 8. Log + report
 Append one line to `~/.claude/nightly/experiment-log.jsonl`:

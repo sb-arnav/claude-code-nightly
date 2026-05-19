@@ -61,7 +61,7 @@ echo
 # 2. Data directory + plugin symlinks
 # ----------------------------------------------------------------------------
 bold "[2/6] Data directory at ${DATA_DIR}"
-mkdir -p "${DATA_DIR}"/{logs,reports,experiments,benchmarks}
+mkdir -p "${DATA_DIR}"/{logs,reports,experiments,benchmarks,proposed}
 ok "created data directories"
 
 # The loop's agent + slash command + baseline.py reference scripts at
@@ -166,6 +166,9 @@ nightly/snapshot.sh
 nightly/strategy_stats.py
 nightly/safety_check.py
 nightly/weekly_rollup.py
+nightly/approve.py
+nightly/reject.py
+nightly/proposed/
 
 # misc
 *.tmp

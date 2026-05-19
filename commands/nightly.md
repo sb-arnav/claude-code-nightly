@@ -1,5 +1,5 @@
 ---
-description: NIGHTLY autoresearch loop against ~/.claude/. Default = run one experiment. Subcommands: status, diff, disapprove.
+description: NIGHTLY autoresearch loop against ~/.claude/. Default = run one experiment in OBSERVATION mode (no auto-commit). Subcommands: status, diff, approve, reject, disapprove, list-proposals.
 ---
 
 Arguments: `$ARGUMENTS`
@@ -38,8 +38,26 @@ sha=$(jq -r 'select(.run_id=="<run_id>")|.new_commit' ~/.claude/nightly/experime
 git -C ~/.claude show "$sha"
 ```
 
+### `approve <run_id>`
+Apply a proposed change from observation mode. The loop proposed it, scored it, and reverted it pending your review. This subcommand re-applies the diff, runs safety_check, and commits with the right author email.
+```bash
+python3 ~/.claude/nightly/approve.py "<run_id>"
+```
+
+### `reject <run_id> "<reason>"`
+Discard a proposed change AND record your reasoning so the proposer learns. Writes the (strategy, target_file) to dead-letter and appends a correction.
+```bash
+python3 ~/.claude/nightly/reject.py "<run_id>" "<reason>"
+```
+
+### `list-proposals`
+Show pending observation-mode proposals awaiting review:
+```bash
+ls -1 ~/.claude/nightly/proposed/ 2>/dev/null | sed 's/\.md$//' | head -20
+```
+
 ### `disapprove <run_id> "<reason>"`
-Veto a kept run. Invoke:
+Veto a kept run that's already in git history (auto-commit mode only — for observation-mode proposals use `reject` instead). Invoke:
 ```bash
 python3 ~/.claude/nightly/disapprove.py "<run_id>" "<reason>"
 ```
