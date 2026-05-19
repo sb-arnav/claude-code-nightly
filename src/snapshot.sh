@@ -23,7 +23,7 @@ AUTOSAFE=(
   "memory/"
   "corrections.jsonl"
   "session-state.md"
-  "projects/-home-user/memory/"        # gitignored anyway, kept for clarity
+  # projects/ is gitignored entirely; no per-user path needs to be listed here.
   "nightly/experiment-log.jsonl"        # loop's own append-only log
   "nightly/dead-letter.jsonl"           # loop's own deadletter log
   "nightly/reports/"                    # morning + weekly reports (audit trail)
@@ -31,7 +31,11 @@ AUTOSAFE=(
 )
 
 # What's currently dirty?
-mapfile -t DIRTY < <(git status --porcelain | awk '{print $2}')
+# -uall expands untracked directories to individual files so the autosafe
+# allowlist (which has concrete paths like nightly/experiment-log.jsonl)
+# can match. Without -uall, git collapses untracked dirs to "nightly/" as
+# a single entry, which never matches the per-file allowlist.
+mapfile -t DIRTY < <(git status --porcelain --untracked-files=all | awk '{print $2}')
 if [[ ${#DIRTY[@]} -eq 0 ]]; then
   echo "snapshot: clean tree, nothing to do"
   exit 0

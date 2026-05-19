@@ -104,14 +104,27 @@ def load_corrections() -> list[dict[str, Any]]:
 
 
 def project_from_dir(dir_name: str) -> str:
-    # `-home-user-myproject` → `myproject`; `-home-user` → `workspace`
+    """Best-effort: unmangle Claude Code's `-home-<user>-<project>` convention.
+
+    Claude Code writes per-project session dirs at
+    `~/.claude/projects/-home-<user>-<…path…>/`. We strip the home-<user>
+    prefix matching the current OS user; what remains is the project name.
+    Examples (assume current user is `bob`):
+      `-home-bob`          → `workspace`
+      `-home-bob-myproject`     → `myproject`
+      `-home-bob-code-foo` → `code/foo`
+    Falls back to a best-effort de-mangled name for any other shape.
+    """
+    import getpass
+    user = getpass.getuser()
     parts = [p for p in dir_name.split("-") if p]
-    if parts and parts[0] == "home" and len(parts) >= 2 and parts[1] == "user":
+    if parts and parts[0] == "home" and len(parts) >= 2 and parts[1] == user:
         rest = parts[2:]
         if not rest:
             return "workspace"
         return "/".join(rest).strip("/") or "workspace"
-    return dir_name.lstrip("-")
+    # Generic fallback for unfamiliar layouts.
+    return dir_name.lstrip("-") or "unknown"
 
 
 def classify_task(prompt: str, tool_counts: Counter, files_changed: list[str]) -> str:
@@ -262,13 +275,22 @@ def main() -> int:
     ap.add_argument("--quiet", action="store_true")
     args = ap.parse_args()
 
-    if not args.projects_dir.exists():
-        print(f"projects dir not found: {args.projects_dir}", file=sys.stderr)
-        return 2
-
     corrections = load_corrections()
     args.out.parent.mkdir(parents=True, exist_ok=True)
     tmp = args.out.with_suffix(args.out.suffix + ".tmp")
+
+    if not args.projects_dir.exists():
+        # Fresh Claude Code install — no sessions to mine yet. Write an empty
+        # corpus and exit 0 so install.sh doesn't die on `set -euo pipefail`.
+        # The loop will start producing useful eval data as the user accumulates
+        # sessions; miner can be re-run anytime via `nightly/miner.py`.
+        tmp.write_text("")
+        tmp.replace(args.out)
+        if not args.quiet:
+            print(f"projects dir not found: {args.projects_dir}")
+            print(f"wrote empty corpus: {args.out}")
+            print("(run again after a few Claude Code sessions have accumulated)")
+        return 0
 
     sessions_seen = 0
     tasks_total = 0

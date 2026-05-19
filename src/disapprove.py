@@ -2,8 +2,8 @@
 """
 NIGHTLY — Disapprove (two-way feedback).
 
-If the user reads a morning report and disagrees with the kept change, he can
-veto it. This script:
+If the user reads a morning report and disagrees with the kept change,
+they can veto it. This script:
 
   1. Looks up the run in experiment-log.jsonl.
   2. Reverts the git commit that introduced the change (if still HEAD).
@@ -157,7 +157,7 @@ def main() -> int:
         "decision": "user-reverted",
         "n_replayed": 0,
         "budget_used_usd": 0.0,
-        "notes": f"Disapproved by the user. revert_mode={revert_mode}. reason={reason}",
+        "notes": f"Disapproved by user. revert_mode={revert_mode}. reason={reason}",
     }
     with EXP_LOG.open("a") as fh:
         fh.write(json.dumps(log_entry) + "\n")
