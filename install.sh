@@ -58,11 +58,21 @@ fi
 echo
 
 # ----------------------------------------------------------------------------
-# 2. Data directory
+# 2. Data directory + plugin symlinks
 # ----------------------------------------------------------------------------
 bold "[2/6] Data directory at ${DATA_DIR}"
 mkdir -p "${DATA_DIR}"/{logs,reports,experiments,benchmarks}
-ok "created"
+ok "created data directories"
+
+# The loop's agent + slash command + baseline.py reference scripts at
+# ~/.claude/nightly/<name> (a stable user-data path), but the source files
+# live under ${PLUGIN_DIR}/src/. Symlink them in so both lookup paths resolve.
+# Re-running install replaces stale symlinks with -sf.
+for f in "${SRC}"/*.py "${SRC}"/*.sh; do
+  [[ -e "$f" ]] || continue
+  ln -sf "$f" "${DATA_DIR}/$(basename "$f")"
+done
+ok "symlinked $(ls ${SRC}/*.py ${SRC}/*.sh 2>/dev/null | wc -l) plugin scripts into ${DATA_DIR}/"
 echo
 
 # ----------------------------------------------------------------------------

@@ -2,6 +2,24 @@
 
 All notable changes to NIGHTLY are recorded here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.3] — 2026-05-19
+
+Fresh-install regression pass, prompted by a thorough external test report (WSL Ubuntu 24.04). All four reported bugs reproduced and fixed.
+
+### Fixed
+- **Sev 1 — install.sh never linked `src/*.py` into `~/.claude/nightly/`.** The agent + slash command + `baseline.py` all reference `~/.claude/nightly/<script>` (a stable user-data path) but the source files live under `${PLUGIN_DIR}/src/`. `install.sh` now `ln -sf` each script in step [2/6] so both paths resolve. Without this, the install step that runs `baseline.py` crashed with `FileNotFoundError ~/.claude/nightly/scorer.py` on every fresh install.
+- **Sev 1 — `snapshot.sh` blocked every fresh-install `/nightly` run.** `git status --porcelain` collapses untracked directories to one entry (`nightly/`), but the autosafe allowlist contained concrete paths (`nightly/experiment-log.jsonl`, etc.). Result: snapshot saw `nightly/` as "unsafe" and exited 3. Fixed by passing `--untracked-files=all` so git lists every untracked file individually.
+- **Sev 2 — `miner.py` crashed on `set -euo pipefail` installs without a populated `~/.claude/projects/`.** Now writes an empty corpus and exits 0 when the projects dir is missing. Same fix applied to `benchmark.py` for the "no eligible tasks" case.
+- **Sev 3 — personal scaffolding leaked through the substrate.** Removed `arnav`/`Arnav` references from `agents/nightly-optimizer.md` (including a dangling link to a personal `~/dreaming/` doc), `src/disapprove.py` (correction log + dead-letter entries no longer hardcode "Arnav vetoed"), and `src/snapshot.sh` autosafe list. `src/miner.py`'s project-name parser now uses `getpass.getuser()` instead of hardcoded `arnav`.
+
+## [0.4.2] — 2026-05-19
+
+### Added
+- `tests/run.sh` — synthetic-data test suite. 21 assertions across miner extraction, benchmark stratification, scorer composition, strategy_stats edge cases, safety_check (3 forbidden-path classes), weekly_rollup, bash syntax for all 5 `.sh` files, and Python compile for all 8 `.py` files. Fixtures built in `mktemp -d`; nothing touches the user's real `~/.claude/`.
+
+### Known issues
+- CI workflow at `.github/workflows/test.yml` was planned but blocked by a local security hook; the YAML is documented inline in `tests/README.md` so users can drop it into their fork.
+
 ## [0.4.1] — 2026-05-19
 
 ### Added

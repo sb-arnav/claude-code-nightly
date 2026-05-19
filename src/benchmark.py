@@ -180,8 +180,20 @@ def main() -> int:
     args.out_dir.mkdir(parents=True, exist_ok=True)
     tasks = [t for t in load_corpus(args.corpus) if keep_task(t)]
     if not tasks:
-        print("no eligible tasks in corpus after filtering")
-        return 2
+        # Fresh install with too few sessions to satisfy filters (e.g., all
+        # under 90 seconds). Write an empty benchmark and exit 0 so install.sh
+        # doesn't die. /nightly will skip replay until the corpus matures.
+        today = datetime.now(tz=timezone.utc).date().isoformat()
+        out = args.out_dir / f"benchmark-{today}.jsonl"
+        out.write_text("")
+        if LATEST.is_symlink() or LATEST.exists():
+            LATEST.unlink()
+        LATEST.symlink_to(out)
+        if not args.quiet:
+            print("no eligible tasks in corpus after filtering")
+            print(f"wrote empty benchmark: {out}")
+            print("(run again after a few real Claude Code sessions have accumulated)")
+        return 0
 
     now = datetime.now(tz=timezone.utc)
     picked = stratified_sample(tasks, args.size, args.seed, now)
