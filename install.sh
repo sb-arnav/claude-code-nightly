@@ -172,6 +172,7 @@ nightly/replay.py
 nightly/judge.py
 nightly/variance.py
 nightly/decide.py
+nightly/corrections_score.py
 nightly/proposed/
 
 # misc

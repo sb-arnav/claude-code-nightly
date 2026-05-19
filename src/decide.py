@@ -122,6 +122,7 @@ def main() -> int:
     score = load_json(args.run_dir / "score.json")
     judge = load_json(args.run_dir / "judge-scores.json")
     variance = load_json(args.run_dir / "variance.json")
+    corrections = load_json(args.run_dir / "corrections-score.json")
 
     if score is None:
         out = {"decision": "error", "reason": "score.json missing", "mode": mode}
@@ -180,6 +181,8 @@ def main() -> int:
     judge_composite = (judge or {}).get("judge_composite") if judge else None
     n_judge_failed = (judge or {}).get("n_failed", 0) if judge else 0
     variance_threshold = (variance or {}).get("noise_threshold_1_5_sigma") if variance else None
+    corrections_composite = (corrections or {}).get("corrections_composite") if corrections else None
+    n_corrections_matched = (corrections or {}).get("n_matched", 0) if corrections else 0
 
     # Gate 1: Δ ≥ +0.02
     if delta is not None and delta >= DELTA_FLOOR:
@@ -215,6 +218,20 @@ def main() -> int:
     else:
         gates_passed.append("judge-completeness")
 
+    # Gate 5: correction-weighted ground-truth (only active when matches exist).
+    # corrections.jsonl entries provide LABELED ground truth — when a benchmark
+    # prompt matches a correction, the response should align with `supposed_to`
+    # (not `what_i_did`). composite >= 0.6 = aligned; < 0.4 = inverted (worse
+    # than v0.2's regex heuristics). Auto-commit refuses to keep on a clear
+    # inversion. No matches = signal absent = gate skipped.
+    CORR_FLOOR = 0.4  # below this is actively wrong-direction
+    if n_corrections_matched == 0 or corrections_composite is None:
+        pass  # no labeled tasks in this run; gate vacuous
+    elif corrections_composite >= CORR_FLOOR:
+        gates_passed.append("corrections-aligned")
+    else:
+        gates_failed.append("corrections-aligned")
+
     # In observation mode, never auto-keep — surface what auto-commit would have done
     if mode == "observation":
         would_keep = (len(gates_failed) == 0)
@@ -239,6 +256,12 @@ def main() -> int:
         elif "judge" in gates_failed or "judge-completeness" in gates_failed:
             decision = "judge-rejected"
             reason = f"judge_composite={judge_composite} failed (floor {JUDGE_FLOOR}) or n_judge_failed={n_judge_failed} >= {MAX_JUDGE_FAILED}"
+        elif "corrections-aligned" in gates_failed:
+            decision = "corrections-misaligned"
+            reason = (
+                f"corrections_composite={corrections_composite} on {n_corrections_matched} "
+                f"labeled tasks — response is closer to what_i_did than supposed_to"
+            )
         elif "judge-missing" in gates_failed or "variance-missing" in gates_failed:
             decision = "gates-missing"
             reason = f"required signals missing: {[g for g in gates_failed if g.endswith('-missing')]}"
@@ -254,6 +277,8 @@ def main() -> int:
         "variance_threshold": round(variance_threshold, 4) if isinstance(variance_threshold, (int, float)) else None,
         "judge_composite": round(judge_composite, 4) if isinstance(judge_composite, (int, float)) else None,
         "n_judge_failed": n_judge_failed,
+        "corrections_composite": round(corrections_composite, 4) if isinstance(corrections_composite, (int, float)) else None,
+        "n_corrections_matched": n_corrections_matched,
         "gates_passed": gates_passed,
         "gates_failed": gates_failed,
         "reason": reason,

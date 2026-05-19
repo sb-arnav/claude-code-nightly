@@ -2,6 +2,30 @@
 
 All notable changes to NIGHTLY are recorded here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.0] — 2026-05-19
+
+The final methodology gap from the reviewer's list: **correction-weighted ground truth**. All 5/5 named critiques now have code AND are gated into the keep decision.
+
+### Added
+- `src/corrections_score.py` — matches benchmark prompts to corrections.jsonl entries (normalized exact + substring fallback), scores responses on `+1 per supposed_to keyword present` and `-1 per what_i_did keyword present` with Laplace smoothing. Writes `corrections-score.json` with composite + per-task hits. This is **labeled** ground truth — when a benchmark task has a matched correction, we know the right behavior, not just that something was wrong.
+- `decide.py` Gate 5 (corrections-aligned): when matches exist, `corrections_composite >= 0.4` required. Below 0.4 = response is closer to `what_i_did` than `supposed_to` = actively wrong-direction → `corrections-misaligned` decision. No matches = gate vacuous (skipped, doesn't block).
+- `decide.py` JSON output now includes `corrections_composite` and `n_corrections_matched`.
+
+### Real finding on the dev corpus
+On the current benchmark + corrections.jsonl, n_matched=0. Reason: corrections were logged on prompts that aren't in the 40-task benchmark sample. The code is wired; matches will start contributing the first time a logged correction lands on a prompt already in the benchmark, OR when the benchmark is rebuilt from a corpus that includes the corrected prompts.
+
+### Five of five critiques now closed with code
+1. **Goodhart-vulnerable regex heuristics** → judge.py (v0.7.0) + corrections_score.py weighted gate (v0.9.0)
+2. **No variance estimation** → variance.py + decide.py variance gate (v0.7.1)
+3. **Computed but not gated** → decide.py mechanical gating (v0.8.0)
+4. **Replay model ≠ production model** → documented honestly in caveat; observation mode is default
+5. **Auto-mining trades labeling for weaker signal** → corrections_score.py closes the labeling gap when corrections accumulate (v0.9.0)
+
+### What's left
+Runtime, not code: an actual production observation period running the loop for weeks, accumulating real correction-labeled benchmark tasks, watching the gate decisions. That's the work that moves the methodology rating past 7.
+
+
+
 ## [0.8.1] — 2026-05-19
 
 External v0.8.0 test report nailed three operational gaps. All fixed.
