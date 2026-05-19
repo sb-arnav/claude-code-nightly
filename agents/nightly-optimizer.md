@@ -50,16 +50,20 @@ The substrate you're improving is `~/.claude/` itself. The eval suite is `~/.cla
 ### 1. Read recent state
 - Last 20 lines of `corrections.jsonl` (last week of corrections drive what to fix).
 - Last 5 lines of `experiment-log.jsonl` (avoid re-trying recently-tried changes).
+- **Per-strategy effectiveness** via `python3 ~/.claude/nightly/strategy_stats.py --json`. Output gives `promising` / `untried` / `neutral` / `avoid` buckets based on historical kept/tried ratios. **Use this to bias proposal selection.**
 - The current `benchmark.jsonl`.
 
 ### 2. Propose ONE candidate change
-Pick the highest-leverage change from this menu, biased by recent corrections:
+Pick the highest-leverage change from this menu. Bias by:
+1. **Strategy effectiveness** (read from `strategy_stats.py`): prefer `promising` over `untried` over `neutral`. Skip `avoid` entirely unless every other strategy is dead-lettered.
+2. **Recent corrections**: a strategy that maps onto a specific recent correction beats one that doesn't.
+3. **Exploration budget**: if 3+ of the 5 strategies are `untried`, pick an `untried` one to gather data (autoskill found 5/7 of their mutations had 0% rate — fast-failing untried strategies is part of the loop).
 
 | Strategy | When to use |
 |---|---|
 | **rule-rewrite** | A correction's `proposed_rule` is concrete and not yet in CLAUDE.md / AGENT_OPERATING_MODE.md. Insert it. |
 | **hook-tighten** | A hook in `~/.claude/hooks/` injects >400 tokens. Rewrite shorter with the same constraint signal. |
-| **memory-add** | Two or more recent corrections share a `root_cause`. Create a feedback memory file. |
+| **memory-add** | Two or more recent corrections share a `root_cause`, OR a `proposed_rule` is mechanical enough to live in a SKILL.md. Create a feedback memory or skill file. |
 | **skill-description-tighten** | A skill's description is generic enough that wrong skills trigger. Tighten. |
 | **rule-reorder** | An anti-pattern rule appears below a less-critical one in operating-mode docs. Move it up. |
 
@@ -78,6 +82,14 @@ Write your proposal to `proposal.json` BEFORE applying — this is the audit tra
 
 ### 3. Apply
 Edit the file(s). Stage the change with `git add -A` but do NOT commit yet. The commit only happens if the experiment is kept.
+
+### 3b. Safety check (mandatory)
+Run:
+```
+python3 ~/.claude/nightly/safety_check.py --target <target_file>
+```
+
+Exit code 3 means the change is destructive (forbidden path, file deleted, or >50% line reduction on a previously-large file). On exit 3: `git reset --hard <baseline_commit>`, log `decision: "unsafe-rejected"`, dead-letter the `(strategy, target_file)` pair, and STOP. Do not score, do not commit. This guards against the autoskill failure mode where the optimizer kept producing 1-line rewrites of large files.
 
 ### 4. Replay benchmark
 For each replayable entry in `benchmark.jsonl` (cap at **10** for v0.1; pick a stratified sample by `task_type` if benchmark has more):
