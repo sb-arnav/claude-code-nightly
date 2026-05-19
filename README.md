@@ -55,15 +55,23 @@ These are synthetic (the real ones live on your machine at `~/.claude/nightly/re
 | **macOS** | ✓ Fully supported | bash + crontab + launchd templates |
 | **Linux** | ✓ Fully supported | bash + crontab |
 | **WSL (Windows Subsystem for Linux)** | ✓ Fully supported | Treated as Linux; bash + crontab |
-| **Native Windows (PowerShell)** | ✗ Not supported | install/verify/snapshot scripts are bash; would need a PowerShell port (~200 lines) + Task Scheduler integration. PRs welcome. **Workaround:** run inside WSL — that's how the v0.4.3 external test report was produced. |
+| **Native Windows (PowerShell)** | ✓ Supported as of v0.6 | PowerShell ports of install/verify/snapshot/tests + Task Scheduler XML. Use `install.ps1`. **Note:** Windows path tested locally via syntax review only; CI on a real Windows runner is on the v0.7 list. File a GitHub issue if anything breaks on your install — fast turnaround. |
 | **GitHub Actions (any host)** | ✓ Cloud option | See `sched/github-action.yml` — runs the loop in a Linux container against a backed-up `~/.claude/` repo. |
 
-**Python scripts** under `src/` are platform-agnostic — they use `Path.home()`, `getpass.getuser()`, `subprocess` for git, and no shell-specific assumptions. Only the install/verify/snapshot/hook orchestration is bash-bound.
+**Python scripts** under `src/` are platform-agnostic — they use `Path.home()`, `getpass.getuser()`, `subprocess` for git, and no shell-specific assumptions. The orchestration (install/verify/snapshot/tests) has parallel bash + PowerShell versions; the SessionStart hook is a single Python file (`hooks/nightly-surface.py`) that runs everywhere.
 
+### Install — macOS / Linux / WSL
 ```bash
 git clone https://github.com/sb-arnav/claude-code-nightly ~/.claude/plugins/nightly
 bash ~/.claude/plugins/nightly/install.sh
 ```
+
+### Install — Windows (PowerShell)
+```powershell
+git clone https://github.com/sb-arnav/claude-code-nightly $HOME\.claude\plugins\nightly
+pwsh -ExecutionPolicy Bypass -File $HOME\.claude\plugins\nightly\install.ps1
+```
+The Windows installer copies plugin scripts into `~\.claude\nightly\` (instead of symlinking — Windows symlinks need admin/Dev Mode), git-inits the substrate, mines your session history, seeds the baseline, and prints the Task Scheduler snippet. Schedule with `Register-ScheduledTask` or import `sched/nightly-task.xml`.
 
 The installer:
 
