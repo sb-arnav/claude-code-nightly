@@ -2,6 +2,27 @@
 
 All notable changes to NIGHTLY are recorded here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.1] — 2026-05-19
+
+External v0.8.0 test report nailed three operational gaps. All fixed.
+
+### Fixed
+- **`PYTHONUTF8` env didn't persist past `install.ps1`.** The fix in v0.8.0 was structurally true but operationally useless — `$env:PYTHONUTF8 = '1'` only affects the install.ps1 process; verify.ps1 / cron / Task Scheduler all get fresh shells with cp1252 stdout. `weekly_rollup.py` was still crashing on `print(report)` (the Unicode arrow goes to stdout, not via write_text). **Real fix**: added `sys.stdout.reconfigure(encoding="utf-8")` + `sys.stderr.reconfigure(encoding="utf-8")` at the top of all 14 entry-point Python scripts (every file with `print()` output). No env reliance, idempotent, safe on all platforms via try/except for older Python.
+- **`decide.py --help` had mojibake on Windows.** Em-dash in the argparse description rendered as `subdir � the parent`. Replaced em-dash with `--` for help-text safety even if `sys.stdout.reconfigure` somehow doesn't take. Belt-and-suspenders.
+- **`decide.py` misleading error message** when `score_mean` is null. v0.8.0 said `"score.json has no score_mean"` even when the key was present but null (from n=0 replayable tasks). Now distinguishes: missing key → `"score.json missing score_mean key"`; null value → `"score_mean is None (likely n=0 replayable tasks — check benchmark.jsonl has replayable entries and run-dir has response files)"`.
+
+### Verified
+- 27/27 tests still pass on WSL/Linux
+- `grep -L "Force UTF-8 stdio" src/*.py` returns empty (all 14 scripts have the block)
+- `decide.py --help` renders cleanly (no em-dash to mangle)
+- decide.py against existing baseline-seed still returns expected `proposed-reverted` with `delta=0.0`
+
+### Methodology rating per the reviewer: 6/10
+- 5 of 5 named methodology critiques have code (not prose) addressing them
+- The remaining 4 points from 6→10 are not in code: they're an actual production observation period running the loop for weeks against real corrections.jsonl entries and seeing what the gate decisions look like in the wild.
+
+
+
 ## [0.8.0] — 2026-05-19
 
 External v0.7.1 review on Windows native turned up two Sev-1s and one structural pushback. All three fixed.

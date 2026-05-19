@@ -49,6 +49,15 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+
+# Force UTF-8 stdio on Windows where Python defaults to cp1252; without this,
+# print() of any Unicode (em-dash, arrows, smart quotes — i.e. most Claude
+# output) crashes with UnicodeEncodeError. Idempotent and safe on all platforms.
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+except (AttributeError, ValueError):
+    pass
 from pathlib import Path
 
 NIGHTLY = Path.home() / ".claude" / "nightly"
@@ -90,7 +99,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--run-dir", type=Path, required=True,
                     help="Path to ~/.claude/nightly/experiments/<run_id>/ "
-                         "(NOT the responses/ subdir — the parent)")
+                         "(NOT the responses/ subdir -- the parent)")
     ap.add_argument("--mode", choices=["auto-commit", "observation"], default=None,
                     help="Override mode detection. Default: auto-detect via auto-commit.yes marker.")
     ap.add_argument("--skip-judge", action="store_true",
@@ -119,9 +128,22 @@ def main() -> int:
         print(json.dumps(out))
         return 2
 
+    if "score_mean" not in score:
+        out = {"decision": "error", "reason": "score.json missing score_mean key", "mode": mode}
+        print(json.dumps(out))
+        return 2
     score_mean = score.get("score_mean")
     if not isinstance(score_mean, (int, float)):
-        out = {"decision": "error", "reason": "score.json has no score_mean", "mode": mode}
+        # Key is present but null — usually n=0 replayable tasks (fresh install,
+        # benchmark filtered to empty, etc). Distinguish from "key missing".
+        out = {
+            "decision": "error",
+            "reason": (
+                f"score_mean is {score_mean!r} (likely n=0 replayable tasks — "
+                "check benchmark.jsonl has replayable entries and run-dir has response files)"
+            ),
+            "mode": mode,
+        }
         print(json.dumps(out))
         return 2
 
