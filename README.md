@@ -117,10 +117,30 @@ Compared against the last `kept` or `first-real-baseline` entry in `experiment-l
 - otherwise → **held** (reverted + dead-lettered so the same `(strategy, target)` isn't retried)
 - if proposed `(strategy, target)` is already in the dead-letter → **blocked** before any work
 
+## Learning between runs
+
+Two pieces keep nightly from being a random walk:
+
+**Strategy effectiveness tracking** (`src/strategy_stats.py`). Walks `experiment-log.jsonl` and computes per-strategy kept/tried rates. The agent reads this on every run and biases proposal selection: prefer `promising` (≥40% rate over ≥3 tries) > `untried` (no data yet) > `neutral` > `avoid` (<10% over ≥5 tries). Inspired by `cgraves09/autoskill`'s FINDINGS.md observation that only 2 of 7 named mutation operators ever produced lasting improvement — without per-strategy tracking, the loop wastes runs on strategies that empirically don't work.
+
+```bash
+python3 ~/.claude/nightly/strategy_stats.py        # human-readable table
+python3 ~/.claude/nightly/strategy_stats.py --json # what the agent reads
+```
+
+**Safety guard** (`src/safety_check.py`). Runs after the agent applies a change, before scoring. Rejects:
+- Forbidden paths (`.gitignore`, `.git/`, `settings.json`, `projects/`, `plugins/`, `statsig/`, `sessions/`, etc.)
+- File deletion of any tracked substrate file
+- >50% line reduction on a previously-large file (the autoskill destructive-rewrite failure mode)
+- Files originally ≥50 lines that ended up <20 lines
+
+Exit 3 → the run is auto-reverted, the `(strategy, target_file)` pair gets dead-lettered, no score is recorded, no commit is made.
+
 ## Inspiration / prior art
 
 - [`karpathy/autoresearch`](https://github.com/karpathy/autoresearch) — original loop shape, ML-training-specific.
 - [`VoidLight00/autoimprove-cc`](https://github.com/VoidLight00/autoimprove-cc) — closest Claude-Code-native artifact. Optimizes a single SKILL.md against hand-written `eval.json` assertions. NIGHTLY's gap closure: the eval is auto-built from your session history.
+- [`cgraves09/autoskill`](https://github.com/cgraves09/autoskill) — Karpathy loop applied to one skill at a time with named mutation operators. NIGHTLY borrows the `strategy_stats.py` effectiveness-tracking pattern and the `safety_check.py` minimum-line-count guard from their published FINDINGS.md (60+ iterations, 45% → 90% on a real skill).
 - `compound-engineering:ce-optimize` skill — full Karpathy loop with worktree isolation, persistence, judge mode. NIGHTLY cribs its append-only-log discipline and keep/revert decision shape, not the 659-line scaffolding.
 
 ## Files
@@ -137,7 +157,9 @@ Compared against the last `kept` or `first-real-baseline` entry in `experiment-l
 │   ├── scorer.py                  # benchmark + replay responses → score
 │   ├── baseline.py                # seeds synthetic bootstrap baseline
 │   ├── snapshot.sh                # pre-run auto-commit of memory + corrections
-│   └── disapprove.py              # /nightly disapprove implementation
+│   ├── disapprove.py              # /nightly disapprove implementation
+│   ├── strategy_stats.py          # per-strategy kept/tried rates → bias proposal selection
+│   └── safety_check.py            # apply-time guard against destructive rewrites
 ├── sched/                         # scheduler templates per platform
 │   ├── com.nightly.plist          # macOS launchd
 │   └── github-action.yml          # cloud cron via GitHub Actions
