@@ -114,7 +114,21 @@ Read `~/.claude/nightly/experiments/<run_id>/replay-summary.json` after it retur
 ### 5. Score
 Run: `python3 ~/.claude/nightly/scorer.py --benchmark ~/.claude/nightly/benchmark.jsonl --run-dir ~/.claude/nightly/experiments/<run_id>/responses --out ~/.claude/nightly/experiments/<run_id>/score.json`
 
-Read `score.json`. The aggregate `score_mean` is the experiment's score.
+Read `score.json`. The aggregate `score_mean` is the experiment's mechanical score.
+
+### 5b. LLM-as-judge (optional, recommended for auto-commit mode)
+If `~/.claude/nightly/auto-commit.yes` exists OR the agent received `--with-judge`, run:
+
+```bash
+python3 ~/.claude/nightly/judge.py \
+  --benchmark ~/.claude/nightly/benchmark.jsonl \
+  --run-dir   ~/.claude/nightly/experiments/<run_id>/responses \
+  --sample 5 --total-budget 0.50
+```
+
+Reads `judge-scores.json` after. The `judge_composite` is a 0-1 score across five rubric dimensions (position-taking, completion, search-first, tool-appropriateness, response-specificity) that the regex heuristics can't reliably detect. **Required for auto-commit**: in auto-commit mode, additionally gate the keep decision on `judge_composite >= 0.6`. If judge_composite is below 0.6 OR `n_failed >= 2`, treat the run as `decision: "judge-rejected"` regardless of mechanical score.
+
+In observation mode (default), judge results surface in the proposal report — the user reviews both mechanical and judge scores before approve/reject. Skip the judge call (cost saving) if `--dry-run` is passed.
 
 ### 6. Compare to baseline
 Read `experiment-log.jsonl`. Walk entries newest-first. Find the **latest entry with `decision == "kept"` or `decision == "first-real-baseline"`** — that's the comparison baseline.
