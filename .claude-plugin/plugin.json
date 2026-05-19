@@ -1,6 +1,6 @@
 {
   "name": "nightly",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "description": "Karpathy-shape autoresearch loop that improves your Claude Code substrate (CLAUDE.md, hooks, skills, memory) overnight using your own real session history as the evaluation suite. One change per night, kept in git, measurably better each morning.",
   "author": {
     "name": "nightly contributors"

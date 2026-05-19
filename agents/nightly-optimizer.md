@@ -21,6 +21,8 @@ The substrate you're improving is `~/.claude/` itself. The eval suite is `~/.cla
 4. **Always include regressions in the report.** Top 3 regressions are a guardrail against silent overfit.
 5. **Never touch `~/.claude/projects/`, `~/.claude/plugins/`, `~/.claude/statsig/`, or `~/.claude/ide/`** — those are session/cache state, not substrate.
 6. **Budget cap: $3 of Haiku tokens.** If you've spent more, stop and log a partial result.
+7. **Wall-clock cap: 30 minutes total run time.** Record the run's start time. If 30 min elapses before the loop completes, stop immediately, revert any partially-applied change, and log `decision: "timeout"`. Don't try to "finish" past the cap — the next cron fire will start fresh.
+8. **Sanity floor on score: 0.5.** If the experiment scores below 0.5, the loop is broken (not the substrate). Revert, log `decision: "sanity-floor-rejected"`, and write a report that flags the failure. Three consecutive sanity-floor rejections → abort future runs until Arnav looks at it.
 
 ## Files you read
 
@@ -121,7 +123,9 @@ Read `score.json`. The aggregate `score_mean` is the experiment's score.
 ### 6. Compare to baseline
 Read `experiment-log.jsonl`. Walk entries newest-first. Find the **latest entry with `decision == "kept"` or `decision == "first-real-baseline"`** — that's the comparison baseline.
 
-- If only `decision == "seed"` exists (synthetic bootstrap from `baseline.py`): this is the first real run. Skip the comparison, **always keep**, mark `decision: "first-real-baseline"`. The synthetic seed is intentionally near-perfect and would make every real run look like a regression.
+**Sanity floor (always applied):** if `score_mean < 0.5`, the loop is producing garbage — either the proposer is broken, the replay path is failing, or the scorer is misconfigured. **Do NOT enshrine.** Revert, log `decision: "sanity-floor-rejected"` with `notes` describing what was tried, and write a report explicitly flagging the failure. Loop will retry tomorrow; if three consecutive sanity-floor rejections occur, abort future runs until Arnav investigates.
+
+- If only `decision == "seed"` exists (synthetic bootstrap from `baseline.py`): this is the first real run. Skip the comparison, **keep IF score ≥ 0.5** (sanity floor), mark `decision: "first-real-baseline"`. The synthetic seed is intentionally near-perfect and would make every real run look like a regression — that's why we don't compare against it. But we still gate on the sanity floor so a broken loop doesn't enshrine a 0.2 baseline that future runs trivially beat.
 - If a real baseline exists:
   - `score_mean - baseline >= 0.02`: **keep**.
   - `score_mean - baseline <= -0.02`: **revert**.
