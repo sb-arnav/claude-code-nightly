@@ -94,26 +94,22 @@ python3 ~/.claude/nightly/safety_check.py --target <target_file>
 Exit code 3 means the change is destructive (forbidden path, file deleted, or >50% line reduction on a previously-large file). On exit 3: `git reset --hard <baseline_commit>`, log `decision: "unsafe-rejected"`, dead-letter the `(strategy, target_file)` pair, and STOP. Do not score, do not commit. This guards against the autoskill failure mode where the optimizer kept producing 1-line rewrites of large files.
 
 ### 4. Replay benchmark
-For each replayable entry in `benchmark.jsonl` (cap at **10** for v0.1; pick a stratified sample by `task_type` if benchmark has more):
 
-1. Run headless: `claude -p --model haiku --max-turns 12 '<prompt>'`. Capture stdout, duration, and parse tool calls from the transcript.
-2. Write per-task response to `experiments/<run_id>/responses/<benchmark_id>.json` with this shape:
-```json
-{
-  "benchmark_id": "...",
-  "duration_sec": 0.0,
-  "output_tokens": 0,
-  "response_text": "...",
-  "tools": {"Read": 4, "Bash": 1},
-  "files_changed": [],
-  "tool_call_sequence": ["Read","Read","Bash"],
-  "completed_cleanly": true,
-  "correction_hook_fired": false
-}
+**Real replay path (default for auto-commit mode and observation mode without `--dry-run`):** invoke `src/replay.py`. It handles the per-task `claude -p --model haiku --output-format json --max-budget-usd <cap>` subprocess loop, parses the structured output, applies budget + timeout caps, and writes per-task response files in the shape scorer.py expects.
+
+```bash
+python3 ~/.claude/nightly/replay.py \
+  --benchmark ~/.claude/nightly/benchmark.jsonl \
+  --run-dir   ~/.claude/nightly/experiments/<run_id>/responses \
+  --model     haiku \
+  --max-tasks 10 \
+  --max-budget-per-task 0.30 \
+  --total-budget 2.00
 ```
-3. **Stop early if budget cap is reached.** Note in the report.
 
-For v0.1, replaying may be expensive. If `--dry-run` is passed, skip replay and use the corpus's ground-truth metrics as a synthetic baseline (lets the loop be tested end-to-end without spending tokens).
+Read `~/.claude/nightly/experiments/<run_id>/replay-summary.json` after it returns — it has per-task duration, cost, completion status, and a `stopped_early` flag if the total-budget cap kicked in. Surface that summary in the morning report.
+
+**Dry-run path (`--dry-run` flag passed to /nightly):** skip the real replay entirely. Instead, synthesize per-task response files from the corpus's ground-truth metrics (same logic as `src/baseline.py`). No token spend. Useful for testing the loop end-to-end without cost; not useful for actually measuring whether a substrate change helped.
 
 ### 5. Score
 Run: `python3 ~/.claude/nightly/scorer.py --benchmark ~/.claude/nightly/benchmark.jsonl --run-dir ~/.claude/nightly/experiments/<run_id>/responses --out ~/.claude/nightly/experiments/<run_id>/score.json`
