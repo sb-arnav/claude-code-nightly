@@ -17,6 +17,13 @@ $ClaudeDir = Join-Path $HOME '.claude'
 $DataDir   = Join-Path $ClaudeDir 'nightly'
 $SrcDir    = Join-Path $PluginDir 'src'
 
+# Defense-in-depth: force UTF-8 for any Python child process spawned by this
+# installer (and tell the user to set it for their cron/Task Scheduler env too).
+# Without this, Python on Windows defaults to cp1252 and crashes on em-dash,
+# smart quotes, Unicode arrows, etc. — which is most of what Claude returns.
+$env:PYTHONUTF8 = '1'
+$env:PYTHONIOENCODING = 'utf-8'
+
 function Write-Bold($Text) { Write-Host $Text -ForegroundColor White }
 function Write-Ok($Text)   { Write-Host "  [ok] $Text" -ForegroundColor Green }
 function Write-Info($Text) { Write-Host "  -   $Text" }
@@ -164,6 +171,7 @@ nightly/reject.py
 nightly/replay.py
 nightly/judge.py
 nightly/variance.py
+nightly/decide.py
 nightly/proposed/
 
 # misc
@@ -176,8 +184,11 @@ nightly/proposed/
         Write-Ok '.gitignore already has nightly block'
     }
 
-    $hasCommits = $true
-    try { git rev-parse HEAD 2>$null | Out-Null } catch { $hasCommits = $false }
+    # PowerShell try/catch doesn't catch native command failures — only the
+    # built-in cmdlet/script exceptions. Use $LASTEXITCODE to detect whether
+    # `git rev-parse HEAD` failed (which it will on a fresh repo with no commits).
+    git rev-parse HEAD 2>$null | Out-Null
+    $hasCommits = ($LASTEXITCODE -eq 0)
     if (-not $hasCommits) {
         git add -A
         git -c user.name=nightly -c user.email=nightly@localhost commit -q -m 'nightly: initial substrate snapshot'

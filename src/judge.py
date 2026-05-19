@@ -295,7 +295,7 @@ def main() -> int:
     }
 
     out = args.run_dir.parent / "judge-scores.json"
-    out.write_text(json.dumps(aggregate, indent=2))
+    out.write_text(json.dumps(aggregate, indent=2), encoding="utf-8")
     print(f"judge: n={aggregate['n_judged']} failed={aggregate['n_failed']} "
           f"composite={aggregate['judge_composite']} cost=${total_cost:.3f}"
           f"{' (stopped-early)' if stopped_early else ''}")

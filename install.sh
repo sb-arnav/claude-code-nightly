@@ -171,6 +171,7 @@ nightly/reject.py
 nightly/replay.py
 nightly/judge.py
 nightly/variance.py
+nightly/decide.py
 nightly/proposed/
 
 # misc

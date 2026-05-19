@@ -2,6 +2,28 @@
 
 All notable changes to NIGHTLY are recorded here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.0] — 2026-05-19
+
+External v0.7.1 review on Windows native turned up two Sev-1s and one structural pushback. All three fixed.
+
+### Fixed (two Sev-1 Windows bugs)
+- **`install.ps1` initial commit was silently skipped.** Line 179-180 used `try { git rev-parse HEAD } catch { ... }` to detect whether the repo had commits — but PowerShell `try/catch` doesn't catch native command failures, only PowerShell exceptions. So on a fresh repo `$hasCommits` stayed `$true` and the commit branch was skipped. Fix: use `$LASTEXITCODE` instead. Result: install.ps1 now actually commits the initial snapshot, snapshot.ps1 sees a clean tree on next invocation.
+- **9 `write_text()` calls without `encoding="utf-8"` crashed on Windows.** Python defaults to cp1252 on Windows, which can't encode `→`, em-dashes, smart quotes, or anything ≥U+0080 — i.e. most of what Claude returns. Today only `weekly_rollup.py` crashed (it writes `→` in score-trend tables); `judge.py` and `replay.py` would have started crashing the moment Claude returned any non-ASCII. Fix: every site now passes `encoding="utf-8"`. Defense-in-depth: `install.ps1` now also exports `PYTHONUTF8=1` and `PYTHONIOENCODING=utf-8` for the install run.
+
+### Added (structural pushback: "computed but not gated")
+- `src/decide.py` — mechanical keep/revert decision. **The agent no longer computes the decision in prose; it executes whatever decide.py returns as JSON.** Implements the four-gate stack from v0.7.1's agent doc as actual code: Δ ≥ +0.02, Δ > variance noise threshold, judge_composite ≥ 0.6, judge n_failed < 2. Emits a distinct `decision` label per failure (`noise-rejected`, `judge-rejected`, `delta-below-floor`, `gates-missing`, `sanity-floor-rejected`, etc.) so the audit trail shows which gate killed the run. Closes the reviewer's structural point: "Variance estimation that's only printed isn't pressure on the keep gate."
+
+### Changed
+- Agent doc step 6 rewritten — agent invokes `decide.py` and follows its decision rather than computing in prose.
+
+### Verified
+- 27/27 tests still pass on Linux (decide.py picked up by `tests/run.sh`'s `src/*.py` syntax loop)
+- decide.py output validated against existing baseline-seed experiment: Δ=0 against 0.0098 variance threshold correctly yields `noise-rejected` with `gates_failed: ["delta-floor","variance"]`
+- All 9 write_text sites pass `grep "write_text(" src/*.py | grep -v "encoding="` returning empty
+- install.ps1 try/catch → $LASTEXITCODE fix verified by reading
+
+
+
 ## [0.7.1] — 2026-05-19
 
 ### Added

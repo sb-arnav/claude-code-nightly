@@ -68,7 +68,7 @@ def main() -> int:
             if not entry.get("replayable"):
                 continue
             resp = synth_response_from_gt(entry)
-            (run_dir / f"{entry['benchmark_id']}.json").write_text(json.dumps(resp))
+            (run_dir / f"{entry['benchmark_id']}.json").write_text(json.dumps(resp), encoding="utf-8")
             n += 1
 
     score_path = NIGHTLY / "experiments" / run_id / "score.json"
