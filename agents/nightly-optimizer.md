@@ -146,6 +146,18 @@ Reads `variance.json`. The key field is `noise_threshold_1_5_sigma` — Δ small
 
 Free to run — no token spend, just re-runs the cheap mechanical scorer on subsamples.
 
+### 5d. Correction-weighted scoring (free; always run)
+Reads `~/.claude/corrections.jsonl`, matches each entry's `prompt` to benchmark prompts, and scores responses against the LABELED ground truth (`supposed_to` vs `what_i_did` keywords).
+
+```bash
+python3 ~/.claude/nightly/corrections_score.py \
+  --benchmark   ~/.claude/nightly/benchmark.jsonl \
+  --corrections ~/.claude/corrections.jsonl \
+  --run-dir     ~/.claude/nightly/experiments/<run_id>/responses
+```
+
+Writes `corrections-score.json` with `n_matched`, `corrections_composite`, and per-matched-task keyword hits. **When `n_matched > 0`**, the auto-commit gate requires `corrections_composite >= 0.4` — below that means the response is closer to the failed behavior than the intended one. **When `n_matched == 0`**, gate is skipped (no signal). Free to run, no token spend.
+
 ### 6. Decide — mechanical, NOT prose
 
 Invoke `decide.py`. **The agent does not compute the decision; the agent executes whatever decide.py returns.** This is the load-bearing mechanical-gate enforcement — prose-based gating is too easy to misread for borderline numbers.
