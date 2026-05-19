@@ -48,6 +48,18 @@ These are synthetic (the real ones live on your machine at `~/.claude/nightly/re
 >
 > Therefore: **observation mode is the default**. The loop proposes changes and scores them but does not commit them. You review and `/nightly approve` or `/nightly reject`. Auto-commit is opt-in via `touch ~/.claude/nightly/auto-commit.yes`, and is not recommended at v0.2. v0.3 will add LLM-as-judge agreement, multi-trial variance, and correction-weighted scoring — gate auto-commit on those.
 
+### Supported platforms
+
+| Platform | Status | Notes |
+|---|---|---|
+| **macOS** | ✓ Fully supported | bash + crontab + launchd templates |
+| **Linux** | ✓ Fully supported | bash + crontab |
+| **WSL (Windows Subsystem for Linux)** | ✓ Fully supported | Treated as Linux; bash + crontab |
+| **Native Windows (PowerShell)** | ✗ Not supported | install/verify/snapshot scripts are bash; would need a PowerShell port (~200 lines) + Task Scheduler integration. PRs welcome. **Workaround:** run inside WSL — that's how the v0.4.3 external test report was produced. |
+| **GitHub Actions (any host)** | ✓ Cloud option | See `sched/github-action.yml` — runs the loop in a Linux container against a backed-up `~/.claude/` repo. |
+
+**Python scripts** under `src/` are platform-agnostic — they use `Path.home()`, `getpass.getuser()`, `subprocess` for git, and no shell-specific assumptions. Only the install/verify/snapshot/hook orchestration is bash-bound.
+
 ```bash
 git clone https://github.com/sb-arnav/claude-code-nightly ~/.claude/plugins/nightly
 bash ~/.claude/plugins/nightly/install.sh
