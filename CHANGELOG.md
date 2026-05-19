@@ -2,6 +2,17 @@
 
 All notable changes to NIGHTLY are recorded here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.3] — 2026-05-19
+
+### Added
+- `tests/test_decide.sh` — 15 unit tests covering every decision branch of `decide.py` with synthetic score/judge/variance/corrections fixtures. Tests: kept, reverted, delta-below-floor, noise-rejected, judge-rejected (low composite), judge-rejected (n_failed), corrections-misaligned, corrections-gate-vacuous, proposed-kept, proposed-reverted, first-real-baseline, sanity-floor-rejected, missing score.json, null score_mean, helpful-error-pointer.
+- Wired into `tests/run.sh` as a new stage; the main suite now reports 29 assertions including the decide-branch rollup.
+
+### Why this matters
+`decide.py` is the load-bearing keep-decision logic. Until now it had only a compile check — any logic regression (off-by-one threshold, missing branch, wrong decision label) would have shipped silently and only been caught by a real test report from the field. 15 branch tests now guard against that.
+
+
+
 ## [0.9.1] — 2026-05-19
 
 ### Fixed
