@@ -169,6 +169,7 @@ nightly/weekly_rollup.py
 nightly/approve.py
 nightly/reject.py
 nightly/replay.py
+nightly/judge.py
 nightly/proposed/
 
 # misc

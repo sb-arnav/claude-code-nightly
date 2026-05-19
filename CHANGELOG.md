@@ -2,6 +2,24 @@
 
 All notable changes to NIGHTLY are recorded here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.7.0] — 2026-05-19
+
+### Added
+- `src/judge.py` — LLM-as-judge scoring. The load-bearing methodology fix the external review named: regex heuristics are gameable, so the judge reads each (prompt, response) pair and scores 1-5 on five rubric dimensions the regexes can't reliably detect: `position_taking`, `task_completion`, `search_first`, `tool_appropriate`, `response_specific`. Reuses `claude -p` for auth (same path as replay.py, no API key needed). Default sample = 5 tasks per run @ ~$0.01-0.02 each, ~$0.05/run total. Writes per-dimension means + a `judge_composite` to `judge-scores.json`.
+
+### Changed
+- Agent doc gained step 5b: judge invocation between mechanical scoring and the keep/revert decision. **In auto-commit mode the keep decision is now gated on `judge_composite >= 0.6` AND `n_failed < 2` in addition to the mechanical Δ.** Observation mode surfaces judge scores in the proposal for user review.
+
+### Why this matters
+Closes the third critique gap (Goodhart-vulnerability). Mechanical scorer alone could be tricked by a CLAUDE.md edit that just forbids the trigger phrases. The judge reads actual response semantics — if a change tightens "no_premature" by removing the word "feels" everywhere but the responses are still hedged, the judge catches it.
+
+### Honest limits still open
+- **Multi-trial variance estimation** — still not built. Δ ≥ +0.02 is still below noise without it. A run that scores 0.85 vs 0.83 could be the same proposal sampled differently. v0.8 work.
+- **Correction-weighted scoring** — `no_correction` already weighted 2.0 (highest), but corrections.jsonl entries themselves aren't matched to specific benchmark tasks for direct ground-truth labels yet. v0.8 work.
+- Judge has its own failure modes (sycophancy, length bias). Use as ONE more signal alongside mechanical, not as sole source of truth. The composite the agent compares against is still mechanical; judge gates the auto-commit floor, doesn't replace the mechanical score.
+
+
+
 ## [0.6.1] — 2026-05-19
 
 ### Added
