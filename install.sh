@@ -198,10 +198,14 @@ case "${OS_KIND}" in
   macOS|Linux|WSL)
     echo "        # NIGHTLY at 22:00 local time"
     echo "        0 22 * * * cd \$HOME && claude -p '/nightly' >> ${DATA_DIR}/logs/cron.log 2>&1"
+    echo
+    echo "     And add a weekly rollup every Sunday at 09:00:"
+    echo "        0 9 * * 0 python3 ${PLUGIN_DIR}/src/weekly_rollup.py >> ${DATA_DIR}/logs/rollup.log 2>&1"
     ;;
   *)
     echo "        # NIGHTLY at 22:00 (verify cron syntax for your platform)"
     echo "        0 22 * * * cd \$HOME && claude -p '/nightly' >> ${DATA_DIR}/logs/cron.log 2>&1"
+    echo "        0 9 * * 0 python3 ${PLUGIN_DIR}/src/weekly_rollup.py >> ${DATA_DIR}/logs/rollup.log 2>&1"
     ;;
 esac
 echo

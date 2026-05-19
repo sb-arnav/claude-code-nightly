@@ -90,6 +90,9 @@ claude -p '/nightly diff 2026-05-18-2200'
 
 # Veto a kept change you disagree with — it becomes a correction + dead-letter
 claude -p '/nightly disapprove 2026-05-18-2200 "don't add hedging to operating mode; that's the opposite of position-first"'
+
+# Weekly rollup — trend across last 7 nights with diffs and strategy guidance
+python3 ~/.claude/nightly/weekly_rollup.py
 ```
 
 ## What gets scored
@@ -159,7 +162,8 @@ Exit 3 → the run is auto-reverted, the `(strategy, target_file)` pair gets dea
 │   ├── snapshot.sh                # pre-run auto-commit of memory + corrections
 │   ├── disapprove.py              # /nightly disapprove implementation
 │   ├── strategy_stats.py          # per-strategy kept/tried rates → bias proposal selection
-│   └── safety_check.py            # apply-time guard against destructive rewrites
+│   ├── safety_check.py            # apply-time guard against destructive rewrites
+│   └── weekly_rollup.py           # aggregates 7 days of runs → trend/diff/guidance report
 ├── sched/                         # scheduler templates per platform
 │   ├── com.nightly.plist          # macOS launchd
 │   └── github-action.yml          # cloud cron via GitHub Actions
