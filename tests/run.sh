@@ -171,6 +171,25 @@ for py in "${SRC}"/*.py; do
 done
 echo
 
+# Stage 10: decide.py decision-branch unit tests
+bold "decide.py decision branches"
+DECIDE_TESTS="${PLUGIN_DIR}/tests/test_decide.sh"
+if [[ -f "${DECIDE_TESTS}" ]]; then
+  DECIDE_OUT=$(bash "${DECIDE_TESTS}" 2>&1)
+  DECIDE_RC=$?
+  DECIDE_PASS=$(echo "$DECIDE_OUT" | grep -oE 'passed: [0-9]+' | awk '{print $2}')
+  DECIDE_FAIL=$(echo "$DECIDE_OUT" | grep -oE 'failed: [0-9]+' | awk '{print $2}')
+  if (( DECIDE_RC == 0 )); then
+    ok "test_decide.sh: ${DECIDE_PASS} decision branches verified"
+  else
+    fail "test_decide.sh: ${DECIDE_FAIL} branches broken"
+    echo "$DECIDE_OUT" | tail -20
+  fi
+else
+  fail "test_decide.sh missing"
+fi
+echo
+
 bold "Summary"
 echo "  passed: ${PASS}"
 echo "  failed: ${FAIL}"
