@@ -5,7 +5,7 @@ NIGHTLY — Personal Benchmark Builder.
 Reads corpus.jsonl (produced by miner.py) and selects a stratified eval suite of
 ~30-50 real prompts from your actual work, weighted across:
 
-  - project diversity (workspace / blade / Staq / arnav / …)
+  - project diversity (workspace / <project-a> / <project-b> / …)
   - task-type diversity (code-change / debug / audit / research / doc-write / exploration / chat)
   - difficulty diversity (short / medium / long)
   - recency mix (60% last 30 days, 30% 30-90 days, 10% older)

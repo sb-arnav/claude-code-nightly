@@ -6,7 +6,7 @@
 
 ## What was tried
 
-Tightened `~/.claude/hooks/design-mode-guard.sh` from ~580 tokens of injected checklist to ~280 tokens, preserving the scan-first signal but removing the verbose example list. Motivated by `corrections.jsonl` entry 2026-06-01 (`hook-too-verbose`) — Arnav noted the hook output was getting clipped in some sessions because of size.
+Tightened `~/.claude/hooks/design-mode-guard.sh` from ~580 tokens of injected checklist to ~280 tokens, preserving the scan-first signal but removing the verbose example list. Motivated by `corrections.jsonl` entry 2026-06-01 (`hook-too-verbose`) — the user noted the hook output was getting clipped in some sessions because of size.
 
 ## Top 3 improvements
 

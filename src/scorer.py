@@ -42,7 +42,8 @@ from pathlib import Path
 NIGHTLY = Path.home() / ".claude" / "nightly"
 
 # Phrases that empirically correlate with premature-closure or hedging behavior
-# Arnav has corrected against. Maintained as a flat list so it's transparent.
+# users have corrected against. Maintained as a flat list so it's transparent
+# and easy to extend per-user.
 PREMATURE_PHRASES = [
     "feels balanced",
     "deferred until",
@@ -57,7 +58,8 @@ PREMATURE_PHRASES = [
 ]
 
 # Patterns that indicate the response offered multiple-choice options instead of
-# taking a position. These trigger Arnav's "take positions, no options" rule.
+# taking a position. Default heuristic for the "take a position, don't hedge"
+# anti-pattern; users can edit per their own correction preferences.
 OPTIONS_PATTERNS = [
     re.compile(r"\b(option|approach|path|choice)\s*[abc1234]\b", re.I),
     re.compile(r"\b(?:there are|here are)\s+(?:two|three|four|2|3|4)\s+(?:options|approaches|paths|ways)\b", re.I),
@@ -175,7 +177,7 @@ def score_task(benchmark: dict, response: dict) -> dict:
 
     # Composite score. Weights chosen so anti-pattern signals (correction
     # firing, premature closure, options framing) materially dominate — those
-    # are behaviors Arnav has explicitly corrected against. Tool alignment is
+    # are behaviors users have explicitly corrected against. Tool alignment is
     # the only tiebreaker; cost is diagnostic-only.
     completion_pts = 1.0 if completed else 0.0
     no_correction_pts = 0.0 if correction_fired else 1.0
