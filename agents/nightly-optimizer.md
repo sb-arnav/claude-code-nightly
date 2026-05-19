@@ -130,6 +130,22 @@ Reads `judge-scores.json` after. The `judge_composite` is a 0-1 score across fiv
 
 In observation mode (default), judge results surface in the proposal report — the user reviews both mechanical and judge scores before approve/reject. Skip the judge call (cost saving) if `--dry-run` is passed.
 
+### 5c. Variance estimation (free; always run in auto-commit mode)
+Mechanical scoring is sample-dependent. Before keeping a change in auto-commit mode, compute the noise floor:
+
+```bash
+python3 ~/.claude/nightly/variance.py \
+  --benchmark ~/.claude/nightly/benchmark.jsonl \
+  --run-dir   ~/.claude/nightly/experiments/<run_id>/responses \
+  --n-samples 20 --subsample-frac 0.7
+```
+
+Reads `variance.json`. The key field is `noise_threshold_1_5_sigma` — Δ smaller than this is statistically indistinguishable from sampling luck.
+
+**In auto-commit mode, the keep decision now requires:** `Δ > noise_threshold_1_5_sigma` AND `Δ >= 0.02` (the original floor) AND `judge_composite >= 0.6`. If any fail, treat as `decision: "noise-rejected"` (variance), `decision: "judge-rejected"` (judge), or `decision: "delta-below-floor"` (mechanical), respectively.
+
+Free to run — no token spend, just re-runs the cheap mechanical scorer on subsamples.
+
 ### 6. Compare to baseline
 Read `experiment-log.jsonl`. Walk entries newest-first. Find the **latest entry with `decision == "kept"` or `decision == "first-real-baseline"`** — that's the comparison baseline.
 

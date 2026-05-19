@@ -2,6 +2,35 @@
 
 All notable changes to NIGHTLY are recorded here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.7.1] — 2026-05-19
+
+### Added
+- `src/variance.py` — bootstrap subsample variance estimator. Closes the fourth named critique gap: "Δ ≥ +0.02 is below noise without variance estimation." Re-runs the mechanical scorer on N=20 stratified subsamples (default `subsample-frac=0.7`), computes stdev across the runs, returns `noise_threshold_1_5_sigma`. Free to run — no token spend, just re-uses existing response files. Validated on my dev benchmark: stdev=0.0066, threshold=0.0098.
+
+### Changed
+- Agent doc step 5c documents the call. **In auto-commit mode, keep decision now requires THREE gates passed:** `Δ > noise_threshold_1_5_sigma` (statistical significance) AND `Δ >= 0.02` (original floor) AND `judge_composite >= 0.6` (semantic quality from v0.7.0). Any failure → distinct decision label (`noise-rejected`, `delta-below-floor`, `judge-rejected`).
+
+### Methodology gap remaining
+- **Correction-weighted ground truth** — corrections.jsonl entries aren't yet matched to specific benchmark tasks as labels. The `no_correction` mechanical signal is correlation-based; true label-weighted scoring requires per-task correction matching. v0.8 work.
+
+### What the loop now looks like (auto-commit mode)
+```
+preflight  → propose → safety_check → apply
+  ↓
+real replay (claude -p haiku, $$)
+  ↓
+mechanical score
+  ↓
+LLM judge ($)
+  ↓
+variance estimate (free)
+  ↓
+gate: Δ > 1.5σ  AND  Δ >= 0.02  AND  judge_composite >= 0.6  →  KEEP
+otherwise → revert + dead-letter the (strategy, target_file)
+```
+
+
+
 ## [0.7.0] — 2026-05-19
 
 ### Added
