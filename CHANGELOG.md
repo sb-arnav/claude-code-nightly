@@ -2,6 +2,17 @@
 
 All notable changes to NIGHTLY are recorded here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.4] — 2026-05-21
+
+### Fixed
+- `install.sh` (PR #1, thanks @luw2007) and `install.ps1` (parity) now symlink/copy each `commands/*.md` into `~/.claude/commands/` during install. Without this, `/nightly` returned "Unknown command" after a fresh install via the curl path.
+- Root cause: `.claude-plugin/plugin.json` already declares the command, but the curl-install flow doesn't go through Claude Code's plugin marketplace registration — so the manifest is never read and the command stays invisible. The symlink (bash) / copy (PowerShell, since Windows symlinks need Dev Mode) makes the command discoverable regardless of install path.
+
+### Why this matters
+This was a silent first-run failure for anyone installing NIGHTLY via the documented `bash <(curl …)` one-liner instead of through a plugin marketplace. The plugin would install, the data dir would build, the SessionStart hook would register — but the headline command would not work. Caught by an external user within hours of release.
+
+
+
 ## [0.9.3] — 2026-05-19
 
 ### Added
