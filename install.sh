@@ -73,6 +73,16 @@ for f in "${SRC}"/*.py "${SRC}"/*.sh; do
   ln -sf "$f" "${DATA_DIR}/$(basename "$f")"
 done
 ok "symlinked $(ls ${SRC}/*.py ${SRC}/*.sh 2>/dev/null | wc -l) plugin scripts into ${DATA_DIR}/"
+
+# Register slash commands in ~/.claude/commands/ so Claude Code discovers them
+# without needing a plugin.json manifest.
+COMMANDS_DIR="${CLAUDE_DIR}/commands"
+mkdir -p "${COMMANDS_DIR}"
+for f in "${PLUGIN_DIR}"/commands/*.md; do
+  [[ -e "$f" ]] || continue
+  ln -sf "$f" "${COMMANDS_DIR}/$(basename "$f")"
+done
+ok "symlinked commands into ${COMMANDS_DIR}/"
 echo
 
 # ----------------------------------------------------------------------------
