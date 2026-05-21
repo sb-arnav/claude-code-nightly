@@ -84,6 +84,18 @@ foreach ($f in Get-ChildItem -Path $SrcDir -File) {
     $copied++
 }
 Write-Ok "copied $copied plugin scripts into $DataDir"
+
+# Register slash commands in ~/.claude/commands/ so Claude Code discovers them
+# when installed via this script (the curl-install path bypasses Claude Code's
+# plugin marketplace registration, so plugin.json alone isn't enough here).
+$CommandsDir = Join-Path $ClaudeDir 'commands'
+New-Item -ItemType Directory -Force -Path $CommandsDir | Out-Null
+$cmdCount = 0
+foreach ($f in Get-ChildItem -Path (Join-Path $PluginDir 'commands') -Filter '*.md' -File -ErrorAction SilentlyContinue) {
+    Copy-Item -Path $f.FullName -Destination (Join-Path $CommandsDir $f.Name) -Force
+    $cmdCount++
+}
+Write-Ok "registered $cmdCount slash commands in $CommandsDir"
 Write-Host ''
 
 # ----------------------------------------------------------------------------
