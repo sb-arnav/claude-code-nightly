@@ -2,14 +2,33 @@
 
 All notable changes to NIGHTLY are recorded here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.6] — 2026-05-21
+
+### Changed (history rewrite — read this if you forked)
+The git history of this repo was rewritten with `git filter-repo --replace-text` to scrub residual personal references from old file blobs. The current HEAD's file content is unchanged; only the content of historical commits was rewritten. Strings replaced across all history:
+
+- `arnavmaurya.am@gmail.com` → `nightly@local`
+- `Arnav Maurya` → `nightly user`
+- `Arnav` / `arnav` → `the user` / `user`
+- `/home/arnav` → `/home/user`, `-home-arnav` → `-home-user`
+- `Staq`, `blade` (other project names that leaked into old docstring examples) → `myproject`, `myapp`
+
+Commit author metadata was intentionally **not** rewritten — that's the maintainer's normal public commit identity across other repos and rewriting it would be cosmetic.
+
+**If you forked this repo, your `main` is now divergent from upstream.** To sync:
+```
+git fetch upstream  # or origin, whichever points at sb-arnav/claude-code-nightly
+git reset --hard upstream/main
+git push origin main --force   # only if you want your fork's GitHub copy to also reflect the rewrite
+```
+
+The rollback SHA for the maintainer is logged at `/tmp/nightly-pre-rewrite.sha` (pre-rewrite tip: `401b715`). The rewrite itself was triggered by an external user picking up the repo and the maintainer wanting clean public hygiene before more eyes land on it.
+
 ## [0.9.5] — 2026-05-21
 
 ### Fixed (privacy / correctness)
 - `src/approve.py` no longer hardcodes the original author's name + personal email as the git identity for user-approved commits. Every other user who ran `/nightly approve` would have had their substrate commit attributed to the plugin author. Now uses the user's own git config — which is the correct semantic, since the commit IS the user's approval.
 - `src/miner.py` docstring example no longer references a real project name from the author's workspace; replaced with a generic `myapp` placeholder.
-
-### Note on git history
-Both strings (the email and the project name) have existed since v0.5.0 and v0.2 respectively. History was not rewritten because (a) the email is already public via the author's normal commit authorship across their repos, (b) the project name is on the same GitHub account anyway, and (c) rewriting would break the existing fork's sync state. Forward-fix is sufficient — the propagation bug in approve.py was the real issue.
 
 
 
