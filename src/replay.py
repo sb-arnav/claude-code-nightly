@@ -77,14 +77,11 @@ def load_benchmark(path: Path) -> list[dict]:
 
 
 def parse_claude_json(stdout: str) -> dict:
-    """Parse claude -p --output-format json output. Best-effort: claude may
-    emit a single JSON object with `result`/`messages`/`usage` keys, or a
-    different shape across versions. We extract:
-      - response_text (final assistant text)
-      - output_tokens (usage)
-      - tools used (counter) + tool_call_sequence (order)
-      - completed_cleanly (bool — did we hit a coherent stop_reason)
-    Falls back to {} on unparseable output."""
+    """Parse claude -p --output-format json output. Handles two shapes:
+      - Array: [{type:"init",...}, {type:"assistant",...}, {type:"result",...}]
+      - Dict:  {type:"result", result:"...", usage:{...}, ...}
+    Extracts response_text, output_tokens, tools, tool_call_sequence,
+    completed_cleanly. Falls back to {} on unparseable output."""
     try:
         o = json.loads(stdout)
     except Exception:
@@ -96,7 +93,40 @@ def parse_claude_json(stdout: str) -> dict:
     output_tokens = 0
     completed = False
 
-    # Shape A: {"type":"result","subtype":"success","result":"…text…","usage":{…},"total_cost_usd":…}
+    # Shape C: JSON array [{type:"init"}, {type:"assistant"}, {type:"result"}]
+    if isinstance(o, list):
+        result_elem = None
+        assistant_elems = []
+        for item in o:
+            if isinstance(item, dict):
+                if item.get("type") == "result":
+                    result_elem = item
+                elif item.get("type") == "assistant":
+                    assistant_elems.append(item)
+        if result_elem is not None:
+            o = result_elem
+        elif o:
+            o = o[-1] if isinstance(o[-1], dict) else {}
+        else:
+            o = {}
+        # Extract tool usage from assistant messages
+        for msg in assistant_elems:
+            content = msg.get("message", {}).get("content") or msg.get("content")
+            if isinstance(content, list):
+                for part in content:
+                    if not isinstance(part, dict):
+                        continue
+                    t = part.get("type")
+                    if t == "tool_use":
+                        name = part.get("name") or "unknown"
+                        tools[name] += 1
+                        seq.append(name)
+                    elif t == "text":
+                        txt = part.get("text") or ""
+                        if txt:
+                            response_text = txt
+
+    # Shape A: {"type":"result","subtype":"success","result":"...","usage":{...}}
     if isinstance(o, dict):
         if isinstance(o.get("result"), str):
             response_text = o["result"]
@@ -157,11 +187,11 @@ def replay_one(prompt: str, model: str, max_budget: float, max_turns: int,
         "--output-format", "json",
         "--max-turns", str(max_turns),
         "--max-budget-usd", f"{max_budget:.2f}",
-        prompt,
     ]
     try:
         proc = subprocess.run(
             cmd,
+            input=prompt,
             capture_output=True,
             text=True,
             timeout=timeout_sec,
@@ -180,6 +210,14 @@ def replay_one(prompt: str, model: str, max_budget: float, max_turns: int,
     cost = 0.0
     try:
         o = json.loads(proc.stdout)
+        # Handle array format: find result element
+        if isinstance(o, list):
+            for item in o:
+                if isinstance(item, dict) and item.get("type") == "result":
+                    o = item
+                    break
+            else:
+                o = {}
         cost = float(o.get("total_cost_usd") or 0.0)
     except Exception:
         pass
@@ -208,6 +246,10 @@ def main() -> int:
     ap.add_argument("--max-turns", type=int, default=12)
     ap.add_argument("--timeout-sec", type=int, default=180,
                     help="Per-task wall-clock timeout")
+    ap.add_argument("--since", type=str, default=None,
+                    help="Only replay tasks with first_message_at >= YYYY-MM-DD")
+    ap.add_argument("--until", type=str, default=None,
+                    help="Only replay tasks with first_message_at <= YYYY-MM-DD (inclusive, end of day)")
     ap.add_argument("--seed", type=int, default=42)
     args = ap.parse_args()
 
@@ -217,6 +259,20 @@ def main() -> int:
     args.run_dir.mkdir(parents=True, exist_ok=True)
 
     bench = [e for e in load_benchmark(args.benchmark) if e.get("replayable")]
+
+    if args.since or args.until:
+        def _in_range(entry: dict) -> bool:
+            ts = (entry.get("first_message_at") or "")[:10]
+            if not ts:
+                return False
+            if args.since and ts < args.since:
+                return False
+            if args.until and ts > args.until:
+                return False
+            return True
+        before = len(bench)
+        bench = [e for e in bench if _in_range(e)]
+        print(f"date filter: {before} -> {len(bench)} tasks (since={args.since}, until={args.until})")
     if not bench:
         print("no replayable benchmark entries — nothing to replay", file=sys.stderr)
         return 0
