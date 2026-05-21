@@ -2,6 +2,17 @@
 
 All notable changes to NIGHTLY are recorded here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.5] — 2026-05-21
+
+### Fixed (privacy / correctness)
+- `src/approve.py` no longer hardcodes the original author's name + personal email as the git identity for user-approved commits. Every other user who ran `/nightly approve` would have had their substrate commit attributed to the plugin author. Now uses the user's own git config — which is the correct semantic, since the commit IS the user's approval.
+- `src/miner.py` docstring example no longer references a real project name from the author's workspace; replaced with a generic `myapp` placeholder.
+
+### Note on git history
+Both strings (the email and the project name) have existed since v0.5.0 and v0.2 respectively. History was not rewritten because (a) the email is already public via the author's normal commit authorship across their repos, (b) the project name is on the same GitHub account anyway, and (c) rewriting would break the existing fork's sync state. Forward-fix is sufficient — the propagation bug in approve.py was the real issue.
+
+
+
 ## [0.9.4] — 2026-05-21
 
 ### Fixed

@@ -126,7 +126,9 @@ def main() -> int:
             print(f"safety_check rejected the re-applied change: {sc.stderr}", file=sys.stderr)
             return 5
 
-    # Commit with the right email
+    # Commit using the user's own git identity — a user-approved change
+    # should be authored by the user, not by the nightly bot. (The bot
+    # identity is reserved for automatic snapshots in snapshot.sh.)
     subprocess.run(["git", "-C", str(CLAUDE), "add", "-A"], check=True)
     msg = (
         f"nightly {args.run_id}: user-approved "
@@ -135,10 +137,7 @@ def main() -> int:
         f"{proposal.get('score_mean','?')}. Manually approved and applied."
     )
     subprocess.run(
-        ["git", "-C", str(CLAUDE),
-         "-c", "user.name=nightly user",
-         "-c", "user.email=nightly@local",
-         "commit", "-q", "-m", msg],
+        ["git", "-C", str(CLAUDE), "commit", "-q", "-m", msg],
         check=True,
     )
     new_sha = subprocess.check_output(

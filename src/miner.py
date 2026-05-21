@@ -119,9 +119,9 @@ def project_from_dir(dir_name: str) -> str:
     `~/.claude/projects/-home-<user>-<…path…>/`. We strip the home-<user>
     prefix matching the current OS user; what remains is the project name.
     Examples (assume current user is `bob`):
-      `-home-bob`          → `workspace`
-      `-home-bob-myproject`     → `myproject`
-      `-home-bob-code-foo` → `code/foo`
+      `-home-bob`            → `workspace`
+      `-home-bob-myapp`      → `myapp`
+      `-home-bob-code-foo`   → `code/foo`
     Falls back to a best-effort de-mangled name for any other shape.
     """
     import getpass
