@@ -168,26 +168,19 @@ def replay_one(prompt: str, model: str, max_budget: float, max_turns: int,
                timeout_sec: int) -> tuple[dict, float, float]:
     """Returns (parsed_response, duration_sec, cost_usd_estimate)."""
     start = time.monotonic()
-    # --bare: skip hooks, LSP, plugin sync, attribution, auto-memory, background
-    # prefetches, keychain reads, and CLAUDE.md auto-discovery. Critical here for
-    # two reasons: (1) without it, replaying recursively loads this plugin's
-    # SessionStart hook, slowing every replay and potentially printing the
-    # NIGHTLY surface banner into the response text; (2) replay is supposed to
-    # measure the *substrate change* in isolation — auto-memory + auto-CLAUDE.md
-    # would confound that by re-pulling fresh context Claude would normally have.
-    # No --bare: --bare authenticates strictly via ANTHROPIC_API_KEY / apiKeyHelper
-    # (OAuth and keychain are never read), so it fails when no API key is set; plain
-    # `claude -p` falls back to the logged-in subscription. --setting-sources project
-    # keeps the replay isolated the way --bare did — user-level SessionStart hooks and
-    # the nightly plugin don't load per replay — without imposing --bare's auth mode.
     cmd = [
         "claude", "-p",
-        "--setting-sources", "project",
         "--model", model,
         "--output-format", "json",
         "--max-turns", str(max_turns),
         "--max-budget-usd", f"{max_budget:.2f}",
     ]
+    env = {
+        **subprocess.os.environ,
+        "DISABLE_OMC": "1",
+        "OMC_SKIP_HOOKS": "SessionStart,PreToolUse,PostToolUse",
+        "CLAUDE_CODE_DISABLE_NONINTERACTIVE_AUTO_MEMORY": "1",
+    }
     try:
         proc = subprocess.run(
             cmd,
@@ -195,6 +188,7 @@ def replay_one(prompt: str, model: str, max_budget: float, max_turns: int,
             capture_output=True,
             text=True,
             timeout=timeout_sec,
+            env=env,
         )
     except subprocess.TimeoutExpired:
         duration = time.monotonic() - start
@@ -239,12 +233,12 @@ def main() -> int:
                     help="claude --model value (haiku/sonnet)")
     ap.add_argument("--max-tasks", type=int, default=10,
                     help="Replay at most N replayable tasks; randomized if benchmark is larger")
-    ap.add_argument("--max-budget-per-task", type=float, default=0.30,
+    ap.add_argument("--max-budget-per-task", type=float, default=1.00,
                     help="Per-task USD cap passed to claude --max-budget-usd")
-    ap.add_argument("--total-budget", type=float, default=2.00,
+    ap.add_argument("--total-budget", type=float, default=5.00,
                     help="Stop early if cumulative cost exceeds this")
     ap.add_argument("--max-turns", type=int, default=12)
-    ap.add_argument("--timeout-sec", type=int, default=180,
+    ap.add_argument("--timeout-sec", type=int, default=300,
                     help="Per-task wall-clock timeout")
     ap.add_argument("--since", type=str, default=None,
                     help="Only replay tasks with first_message_at >= YYYY-MM-DD")
