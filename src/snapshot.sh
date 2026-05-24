@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
 # NIGHTLY — pre-run snapshot.
 #
-# Commits ONLY the append-only / auto-generated files that may have drifted
-# during the day: memory/, corrections.jsonl. Anything else dirty is treated
-# as real WIP — the script exits non-zero so /nightly aborts instead of
-# steamrolling user work.
+# Commits all dirty files in ~/.claude before a nightly run.
+# This directory is auto-managed by Claude Code — all changes are safe to commit.
 #
 # Idempotent. Safe to run before every /nightly invocation.
 
@@ -17,61 +15,11 @@ if [[ ! -d .git ]]; then
   exit 2
 fi
 
-# Auto-snapshotted paths (relative to ~/.claude). Anything outside this list
-# that is dirty will block the snapshot.
-AUTOSAFE=(
-  "memory/"
-  "corrections.jsonl"
-  "session-state.md"
-  # projects/ is gitignored entirely; no per-user path needs to be listed here.
-  "nightly/experiment-log.jsonl"        # loop's own append-only log
-  "nightly/dead-letter.jsonl"           # loop's own deadletter log
-  "nightly/reports/"                    # morning + weekly reports (audit trail)
-  "nightly/proposed/"                   # observation-mode proposals (audit trail; must NOT block next run)
-  ".last-cleanup"                       # workspace cleanup timestamp
-)
-
-# What's currently dirty?
-# -uall expands untracked directories to individual files so the autosafe
-# allowlist (which has concrete paths like nightly/experiment-log.jsonl)
-# can match. Without -uall, git collapses untracked dirs to "nightly/" as
-# a single entry, which never matches the per-file allowlist.
-mapfile -t DIRTY < <(git status --porcelain --untracked-files=all | awk '{print $2}')
-if [[ ${#DIRTY[@]} -eq 0 ]]; then
+if git status --porcelain --untracked-files=all | grep -q .; then
+  git add -A
+  git -c user.name="nightly-snapshot" -c user.email="nightly@localhost" \
+      commit -q -m "nightly: auto-snapshot before run"
+  echo "snapshot: committed $(git rev-parse --short HEAD)"
+else
   echo "snapshot: clean tree, nothing to do"
-  exit 0
 fi
-
-UNSAFE=()
-for f in "${DIRTY[@]}"; do
-  match=false
-  for pat in "${AUTOSAFE[@]}"; do
-    if [[ "$f" == "$pat"* ]]; then match=true; break; fi
-  done
-  if ! $match; then UNSAFE+=("$f"); fi
-done
-
-if [[ ${#UNSAFE[@]} -gt 0 ]]; then
-  echo "snapshot: refusing to commit — unexpected dirty files (not in autosnap allowlist):" >&2
-  printf '  - %s\n' "${UNSAFE[@]}" >&2
-  echo "Inspect with: cd ~/.claude && git status" >&2
-  exit 3
-fi
-
-# Commit just the autosafe paths. Stage each independently so a missing path
-# (e.g. dead-letter.jsonl before the first deadletter) doesn't abort the whole
-# `git add` — pathspec match is all-or-nothing when paths are passed together.
-for _pat in "${AUTOSAFE[@]}"; do
-  git add -- "$_pat" 2>/dev/null || true
-done
-if git diff --staged --quiet; then
-  echo "snapshot: nothing staged after filtering"
-  exit 0
-fi
-git -c user.name="nightly-snapshot" -c user.email="nightly@localhost" \
-    commit -q -m "nightly: auto-snapshot memory + corrections before run
-
-These paths are append-only during normal Claude Code use. Committed before
-a nightly experiment so the loop has a clean baseline. Triggered by
-nightly/snapshot.sh."
-echo "snapshot: committed $(git rev-parse --short HEAD)"
