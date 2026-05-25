@@ -27,6 +27,7 @@ AUTOSAFE=(
   "nightly/experiment-log.jsonl"        # loop's own append-only log
   "nightly/dead-letter.jsonl"           # loop's own deadletter log
   "nightly/reports/"                    # morning + weekly reports (audit trail)
+  "nightly/proposed/"                   # observation-mode proposals (audit trail; must NOT block next run)
   ".last-cleanup"                       # workspace cleanup timestamp
 )
 
@@ -57,8 +58,12 @@ if [[ ${#UNSAFE[@]} -gt 0 ]]; then
   exit 3
 fi
 
-# Commit just the autosafe paths.
-git add -- "${AUTOSAFE[@]}" 2>/dev/null || true
+# Commit just the autosafe paths. Stage each independently so a missing path
+# (e.g. dead-letter.jsonl before the first deadletter) doesn't abort the whole
+# `git add` — pathspec match is all-or-nothing when paths are passed together.
+for _pat in "${AUTOSAFE[@]}"; do
+  git add -- "$_pat" 2>/dev/null || true
+done
 if git diff --staged --quiet; then
   echo "snapshot: nothing staged after filtering"
   exit 0

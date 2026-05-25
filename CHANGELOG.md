@@ -2,6 +2,15 @@
 
 All notable changes to NIGHTLY are recorded here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.7] — 2026-05-25
+
+### Fixed
+- **Replay authentication.** `replay.py` invoked `claude -p --bare`, which authenticates strictly via `ANTHROPIC_API_KEY` / `apiKeyHelper` and never reads OAuth/keychain — so on machines without an API key every replay silently ran 0 tool calls and scored a flat baseline, making all deltas noise. Dropped `--bare` and added `--setting-sources project`: replays stay isolated (user SessionStart hooks and the plugin don't load) while falling back to the logged-in subscription.
+- **Snapshot self-block.** A pending file in `nightly/proposed/` left the tree dirty and blocked every subsequent run's preflight. Added `nightly/proposed/` to the autosafe allowlist so proposals are committed as audit trail instead of halting the loop.
+- **Snapshot staging.** Staging the autosafe list was all-or-nothing — a not-yet-created path (e.g. `dead-letter.jsonl`) aborted the whole `git add`. Each path is now staged independently.
+- **Fail-loud scoring.** If no replayed task completes cleanly, the run aborts instead of averaging empty/error responses into a confident-looking delta.
+- **Proposal parsing.** `approve.py` / `reject.py` only parsed a fenced `json` metadata block, but proposals are written as human-readable markdown — so every approve/reject silently failed. Both now parse the markdown fields; `approve.py` verifies only the target file is clean (not the whole tree) and removes the proposal in the same commit.
+
 ## [0.9.6] — 2026-05-21
 
 ### Changed (history rewrite — read this if you forked)

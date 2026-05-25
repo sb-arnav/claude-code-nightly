@@ -145,8 +145,14 @@ def replay_one(prompt: str, model: str, max_budget: float, max_turns: int,
     # NIGHTLY surface banner into the response text; (2) replay is supposed to
     # measure the *substrate change* in isolation — auto-memory + auto-CLAUDE.md
     # would confound that by re-pulling fresh context Claude would normally have.
+    # No --bare: --bare authenticates strictly via ANTHROPIC_API_KEY / apiKeyHelper
+    # (OAuth and keychain are never read), so it fails when no API key is set; plain
+    # `claude -p` falls back to the logged-in subscription. --setting-sources project
+    # keeps the replay isolated the way --bare did — user-level SessionStart hooks and
+    # the nightly plugin don't load per replay — without imposing --bare's auth mode.
     cmd = [
-        "claude", "-p", "--bare",
+        "claude", "-p",
+        "--setting-sources", "project",
         "--model", model,
         "--output-format", "json",
         "--max-turns", str(max_turns),
@@ -229,6 +235,7 @@ def main() -> int:
         "total_cost_usd": 0.0,
         "model": args.model,
         "per_task": [],
+        "n_tasks_with_tools": 0,
         "stopped_early": False,
     }
 
@@ -266,18 +273,34 @@ def main() -> int:
             response["_replay_returncode"] = parsed["_returncode"]
         (args.run_dir / f"{bid}.json").write_text(json.dumps(response, indent=2), encoding="utf-8")
 
+        if parsed.get("tool_call_sequence"):
+            summary["n_tasks_with_tools"] += 1
         summary["per_task"].append({
             "benchmark_id": bid,
             "duration_sec": round(duration, 2),
             "cost_usd": round(cost, 4),
             "completed": bool(parsed.get("completed_cleanly", False)),
             "timeout": bool(parsed.get("_timeout", False)),
+            "n_tool_calls": len(parsed.get("tool_call_sequence") or []),
         })
         summary["total_cost_usd"] = round(summary["total_cost_usd"] + cost, 4)
 
     summary["total_cost_usd"] = round(summary["total_cost_usd"], 4)
     summary_path = args.run_dir.parent / "replay-summary.json"
     summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+
+    # Fail loud: if NO task completed cleanly, the replays didn't actually execute
+    # (auth/exec broken → empty/error responses) and scoring would average garbage
+    # into a confident delta — the failure that made the loop "measure nothing".
+    # (n_tasks_with_tools is a diagnostic only: --output-format json doesn't expose
+    # tool_use steps, and context-stripped replays rarely call tools anyway, so a
+    # completed-but-toolless response is still valid for the text-based signals.)
+    if summary["n_attempted"] > 0 and summary["n_completed"] == 0:
+        summary["replay_invalid"] = True
+        summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+        print(f"replay: FATAL — 0/{summary['n_attempted']} tasks completed cleanly; "
+              "replays did not execute. Not scoring.", file=sys.stderr)
+        return 2
 
     print(f"replay: attempted={summary['n_attempted']} "
           f"completed={summary['n_completed']} "

@@ -41,21 +41,42 @@ DEAD = NIGHTLY / "dead-letter.jsonl"
 CORRECTIONS = CLAUDE / "corrections.jsonl"
 
 
+def parse_markdown_meta(text: str) -> dict:
+    """The optimizer writes proposals as human-readable markdown (**Strategy:**,
+    **Target:** …), not a ```json block. Extract what reject needs."""
+    meta: dict = {}
+
+    def field(label: str) -> str | None:
+        m = re.search(rf"\*\*{label}:\*\*\s*`?([^`\n]+?)`?\s*$", text, re.MULTILINE)
+        return m.group(1).strip() if m else None
+
+    if (s := field("Strategy")):
+        meta["strategy"] = s
+    if (t := field("Target")):
+        meta["target_file"] = t
+    return meta
+
+
 def load_proposal_meta(run_id: str) -> dict | None:
+    """Supports both the legacy ```json metadata block and the human-readable
+    markdown the optimizer actually writes."""
     p = PROPOSED_DIR / f"{run_id}.md"
     if not p.exists():
         return None
     text = p.read_text()
-    meta_re = re.compile(r"```json\n(.*?)\n```", re.DOTALL)
-    m = meta_re.search(text)
-    if not m:
+    m = re.search(r"```json\n(.*?)\n```", text, re.DOTALL)
+    meta: dict | None = None
+    if m:
+        try:
+            meta = json.loads(m.group(1))
+        except Exception:
+            meta = None
+    if meta is None:
+        meta = parse_markdown_meta(text)
+    if not meta.get("strategy") and not meta.get("target_file"):
         return None
-    try:
-        meta = json.loads(m.group(1))
-        meta["_path"] = str(p)
-        return meta
-    except Exception:
-        return None
+    meta["_path"] = str(p)
+    return meta
 
 
 def main() -> int:
