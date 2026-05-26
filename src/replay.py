@@ -246,6 +246,8 @@ def main() -> int:
                     help="Only replay tasks with first_message_at >= YYYY-MM-DD")
     ap.add_argument("--until", type=str, default=None,
                     help="Only replay tasks with first_message_at <= YYYY-MM-DD (inclusive, end of day)")
+    ap.add_argument("--min-scorable", type=int, default=None,
+                    help="Adaptive window: if fewer than N tasks pass all filters, widen --since backward 7 days at a time until met")
     ap.add_argument("--seed", type=int, default=42)
     args = ap.parse_args()
 
@@ -256,16 +258,17 @@ def main() -> int:
 
     bench = [e for e in load_benchmark(args.benchmark) if e.get("replayable")]
 
+    def _in_range(entry: dict) -> bool:
+        ts = (entry.get("first_message_at") or "")[:10]
+        if not ts:
+            return False
+        if args.since and ts < args.since:
+            return False
+        if args.until and ts > args.until:
+            return False
+        return True
+
     if args.since or args.until:
-        def _in_range(entry: dict) -> bool:
-            ts = (entry.get("first_message_at") or "")[:10]
-            if not ts:
-                return False
-            if args.since and ts < args.since:
-                return False
-            if args.until and ts > args.until:
-                return False
-            return True
         before = len(bench)
         bench = [e for e in bench if _in_range(e)]
         print(f"date filter: {before} -> {len(bench)} tasks (since={args.since}, until={args.until})")
@@ -279,6 +282,25 @@ def main() -> int:
     bench = [e for e in bench if (e.get("ground_truth", {}).get("duration_sec") or 0) <= max_dur]
     if len(bench) < before_dur:
         print(f"duration filter: {before_dur} -> {len(bench)} tasks (max_duration={max_dur:.0f}s)")
+
+    # Adaptive window: widen --since backward if not enough scorable tasks
+    if args.min_scorable and args.since and len(bench) < args.min_scorable:
+        from datetime import datetime, timedelta
+        original_since = args.since
+        all_replayable = [e for e in load_benchmark(args.benchmark) if e.get("replayable")]
+        for _ in range(4):  # max 4 expansions (28 days back)
+            dt = datetime.strptime(args.since, "%Y-%m-%d") - timedelta(days=7)
+            args.since = dt.strftime("%Y-%m-%d")
+            expanded = [e for e in all_replayable if _in_range(e)]
+            expanded = [e for e in expanded if (e.get("ground_truth", {}).get("duration_sec") or 0) <= max_dur]
+            if len(expanded) >= args.min_scorable:
+                bench = expanded
+                break
+        if len(bench) >= args.min_scorable:
+            print(f"adaptive window: widened since {original_since} -> {args.since} ({len(bench)} scorable tasks)")
+        else:
+            print(f"adaptive window: could not reach {args.min_scorable} tasks (got {len(bench)}, since={args.since})")
+
     if not bench:
         print("no tasks within duration limit — nothing to replay", file=sys.stderr)
         return 0
