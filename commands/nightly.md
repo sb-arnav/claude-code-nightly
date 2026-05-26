@@ -1,5 +1,5 @@
 ---
-description: NIGHTLY autoresearch loop against ~/.claude/. Default = run one experiment in OBSERVATION mode (no auto-commit). Subcommands: status, diff, approve, reject, disapprove, list-proposals.
+description: "NIGHTLY autoresearch loop against ~/.claude/. Default = run one experiment in OBSERVATION mode (no auto-commit). Subcommands: status, diff, approve, reject, disapprove, list-proposals."
 ---
 
 Arguments: `$ARGUMENTS`
@@ -23,6 +23,8 @@ Recognized flags (pass-through):
 - `--dry-run` — skip benchmark replay, use corpus ground-truth as synthetic substitute
 - `--budget <usd>` — override default $3 cap
 - `--n <count>` — override default 10 replayable tasks
+- `--since <YYYY-MM-DD>` — only replay tasks with first_message_at >= this date
+- `--until <YYYY-MM-DD>` — only replay tasks with first_message_at <= this date (inclusive)
 
 ### `status`
 Print a one-screen status:

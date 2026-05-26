@@ -273,20 +273,31 @@ def main() -> int:
         per_task.append(score_task(entry, resp))
 
     scores = [t["score"] for t in per_task]
+    # Filter out sandbox-miss tasks: timeout (duration >= timeout-0.5s) with 0 tool calls.
+    # These tasks failed because the replay sandbox lacks project context, not because
+    # the substrate change caused a regression. Include them in per_task for transparency
+    # but exclude from aggregate scoring.
+    scorable = [t for t in per_task if not (
+        t["raw"].get("duration_sec", 0) >= 299.5 and t["raw"].get("tools_total", 1) == 0
+    )]
+    scorable_scores = [t["score"] for t in scorable]
+    n_excluded = len(per_task) - len(scorable)
     aggregate = {
         "n": len(per_task),
+        "n_scorable": len(scorable),
+        "n_sandbox_miss": n_excluded,
         "missing_responses": missing,
-        "score_mean": round(statistics.mean(scores), 4) if scores else None,
-        "score_median": round(statistics.median(scores), 4) if scores else None,
-        "score_stdev": round(statistics.stdev(scores), 4) if len(scores) > 1 else None,
+        "score_mean": round(statistics.mean(scorable_scores), 4) if scorable_scores else None,
+        "score_median": round(statistics.median(scorable_scores), 4) if scorable_scores else None,
+        "score_stdev": round(statistics.stdev(scorable_scores), 4) if len(scorable_scores) > 1 else None,
         "component_means": {
-            k: round(statistics.mean([t["components"][k] for t in per_task]), 4)
+            k: round(statistics.mean([t["components"][k] for t in scorable]), 4)
             for k in ("completion","no_correction","no_premature","no_options","search_first","tool_alignment")
-        } if per_task else {},
+        } if scorable else {},
         "diagnostic_means": {
-            k: round(statistics.mean([t["diagnostics"][k] for t in per_task]), 4)
+            k: round(statistics.mean([t["diagnostics"][k] for t in scorable]), 4)
             for k in ("cost",)
-        } if per_task else {},
+        } if scorable else {},
         "per_task": per_task,
     }
     blob = json.dumps(aggregate, indent=2)

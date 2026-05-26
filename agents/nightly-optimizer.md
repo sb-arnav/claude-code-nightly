@@ -19,7 +19,7 @@ The substrate you're improving is `~/.claude/` itself. The eval suite is `~/.cla
 2. **`~/.claude/` must be a clean git repo at start.** If `git status` shows uncommitted changes, abort with a clear message — never destroy the user's in-flight work.
 3. **All state goes to disk immediately.** Every measurement, every decision. The conversation is not durable storage.
 4. **Always include regressions in the report.** Top 3 regressions are a guardrail against silent overfit.
-5. **Never touch `~/.claude/projects/`, `~/.claude/plugins/`, `~/.claude/statsig/`, or `~/.claude/ide/`** — those are session/cache state, not substrate.
+5. **Never touch `~/.claude/projects/`, `~/.claude/plugins/`, `~/.claude/statsig/`, or `~/.claude/ide/`** — those are session/cache state, not substrate. Exception: `skill-lifecycle` strategy moves skills between `~/.claude/skills/` ↔ `~/.claude/_archive_skills/` and `~/.agents/skills/` ↔ `~/.agents/_archive_skills/` via `skill_lifecycle.py`.
 6. **Budget cap: $3 of Haiku tokens.** If you've spent more, stop and log a partial result.
 7. **Wall-clock cap: 30 minutes total run time.** Record the run's start time. If 30 min elapses before the loop completes, stop immediately, revert any partially-applied change, and log `decision: "timeout"`. Don't try to "finish" past the cap — the next cron fire will start fresh.
 8. **Sanity floor on score: 0.5.** If the experiment scores below 0.5, the loop is broken (not the substrate). Revert, log `decision: "sanity-floor-rejected"`, and write a report that flags the failure. Three consecutive sanity-floor rejections → abort future runs until the user investigates.
@@ -68,6 +68,7 @@ Pick the highest-leverage change from this menu. Bias by:
 | **memory-add** | Two or more recent corrections share a `root_cause`, OR a `proposed_rule` is mechanical enough to live in a SKILL.md. Create a feedback memory or skill file. |
 | **skill-description-tighten** | A skill's description is generic enough that wrong skills trigger. Tighten. |
 | **rule-reorder** | An anti-pattern rule appears below a less-critical one in operating-mode docs. Move it up. |
+| **skill-lifecycle** | `skill_lifecycle.py --propose` returns a candidate. Archive a 30d-unused skill (reduce prompt noise) or recall an archived skill with ≥3 recent hits. |
 
 Write your proposal to `proposal.json` BEFORE applying — this is the audit trail.
 ```json
@@ -82,8 +83,20 @@ Write your proposal to `proposal.json` BEFORE applying — this is the audit tra
 }
 ```
 
+**skill-lifecycle specific proposal flow:**
+```bash
+python3 ~/.claude/plugins/nightly/src/skill_lifecycle.py --propose
+```
+If exit 0, the JSON output has `name`, `source`, `action`, `hits`, `size_bytes`. Use these to fill `proposal.json` with `target_file` = the skill's SKILL.md path. If exit 1, no candidate — pick another strategy.
+
 ### 3. Apply
 Edit the file(s). Stage the change with `git add -A` but do NOT commit yet. The commit only happens if the experiment is kept.
+
+**skill-lifecycle apply:** instead of editing files, run:
+```bash
+python3 ~/.claude/plugins/nightly/src/skill_lifecycle.py --apply --name <name> --action <archive|recall> --source <claude|agents>
+```
+Exit 0 = applied. Exit 3 = safety rejected (protected/min-active-count) — treat as safety_check failure.
 
 ### 3b. Safety check (mandatory)
 Run:
@@ -191,12 +204,13 @@ Before applying decision, read `~/.claude/nightly/dead-letter.jsonl` if it exist
 
 **Default — observation mode** (auto-commit marker file absent):
 - Regardless of decision (`keep`, `revert`, `held`), **always revert** the change with `git reset --hard <baseline_commit>`. NIGHTLY never mutates substrate without user review while in this mode.
+- **skill-lifecycle revert:** also run `python3 ~/.claude/plugins/nightly/src/skill_lifecycle.py --revert --name <name> --action <action> --source <source>` to move the skill back before `git reset`.
 - Write the proposal, diff, and score to `~/.claude/nightly/proposed/<run_id>.md` so the user can review and manually approve via `/nightly approve <run_id>` (which re-applies the change and commits with the correct author email).
 - Mark the experiment-log `decision: "proposed-<original_decision>"` (e.g. `proposed-kept`, `proposed-reverted`) so the audit trail shows what the loop WOULD have done.
 
 **Auto-commit mode** (user explicitly opted in by creating `~/.claude/nightly/auto-commit.yes`):
 - **Keep**: `cd ~/.claude && git commit -m "nightly <run_id>: <strategy> — score <baseline> → <new> (+<delta>)"`.
-- **Revert / hold**: `cd ~/.claude && git reset --hard <baseline_commit>`.
+- **Revert / hold**: `cd ~/.claude && git reset --hard <baseline_commit>`. For **skill-lifecycle**, also run `python3 ~/.claude/plugins/nightly/src/skill_lifecycle.py --revert --name <name> --action <action> --source <source>` before the git reset.
 
 **Why observation mode is the default:** v0.2 scoring uses six regex heuristics over historical replay. The signals are gameable (e.g. a CLAUDE.md edit that forbids "feels balanced" trivially scores higher without improving reasoning), the Δ ≥ +0.02 threshold is below noise without variance estimation, and ground truth is "what the historical assistant did", not "what should have happened". Until v0.3 adds LLM-as-judge + multi-trial variance + correction-weighted scoring, NIGHTLY should propose changes, not commit them.
 

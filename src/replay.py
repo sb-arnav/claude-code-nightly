@@ -77,14 +77,11 @@ def load_benchmark(path: Path) -> list[dict]:
 
 
 def parse_claude_json(stdout: str) -> dict:
-    """Parse claude -p --output-format json output. Best-effort: claude may
-    emit a single JSON object with `result`/`messages`/`usage` keys, or a
-    different shape across versions. We extract:
-      - response_text (final assistant text)
-      - output_tokens (usage)
-      - tools used (counter) + tool_call_sequence (order)
-      - completed_cleanly (bool — did we hit a coherent stop_reason)
-    Falls back to {} on unparseable output."""
+    """Parse claude -p --output-format json output. Handles two shapes:
+      - Array: [{type:"init",...}, {type:"assistant",...}, {type:"result",...}]
+      - Dict:  {type:"result", result:"...", usage:{...}, ...}
+    Extracts response_text, output_tokens, tools, tool_call_sequence,
+    completed_cleanly. Falls back to {} on unparseable output."""
     try:
         o = json.loads(stdout)
     except Exception:
@@ -96,7 +93,40 @@ def parse_claude_json(stdout: str) -> dict:
     output_tokens = 0
     completed = False
 
-    # Shape A: {"type":"result","subtype":"success","result":"…text…","usage":{…},"total_cost_usd":…}
+    # Shape C: JSON array [{type:"init"}, {type:"assistant"}, {type:"result"}]
+    if isinstance(o, list):
+        result_elem = None
+        assistant_elems = []
+        for item in o:
+            if isinstance(item, dict):
+                if item.get("type") == "result":
+                    result_elem = item
+                elif item.get("type") == "assistant":
+                    assistant_elems.append(item)
+        if result_elem is not None:
+            o = result_elem
+        elif o:
+            o = o[-1] if isinstance(o[-1], dict) else {}
+        else:
+            o = {}
+        # Extract tool usage from assistant messages
+        for msg in assistant_elems:
+            content = msg.get("message", {}).get("content") or msg.get("content")
+            if isinstance(content, list):
+                for part in content:
+                    if not isinstance(part, dict):
+                        continue
+                    t = part.get("type")
+                    if t == "tool_use":
+                        name = part.get("name") or "unknown"
+                        tools[name] += 1
+                        seq.append(name)
+                    elif t == "text":
+                        txt = part.get("text") or ""
+                        if txt:
+                            response_text = txt
+
+    # Shape A: {"type":"result","subtype":"success","result":"...","usage":{...}}
     if isinstance(o, dict):
         if isinstance(o.get("result"), str):
             response_text = o["result"]
@@ -138,33 +168,27 @@ def replay_one(prompt: str, model: str, max_budget: float, max_turns: int,
                timeout_sec: int) -> tuple[dict, float, float]:
     """Returns (parsed_response, duration_sec, cost_usd_estimate)."""
     start = time.monotonic()
-    # --bare: skip hooks, LSP, plugin sync, attribution, auto-memory, background
-    # prefetches, keychain reads, and CLAUDE.md auto-discovery. Critical here for
-    # two reasons: (1) without it, replaying recursively loads this plugin's
-    # SessionStart hook, slowing every replay and potentially printing the
-    # NIGHTLY surface banner into the response text; (2) replay is supposed to
-    # measure the *substrate change* in isolation — auto-memory + auto-CLAUDE.md
-    # would confound that by re-pulling fresh context Claude would normally have.
-    # No --bare: --bare authenticates strictly via ANTHROPIC_API_KEY / apiKeyHelper
-    # (OAuth and keychain are never read), so it fails when no API key is set; plain
-    # `claude -p` falls back to the logged-in subscription. --setting-sources project
-    # keeps the replay isolated the way --bare did — user-level SessionStart hooks and
-    # the nightly plugin don't load per replay — without imposing --bare's auth mode.
     cmd = [
         "claude", "-p",
-        "--setting-sources", "project",
         "--model", model,
         "--output-format", "json",
         "--max-turns", str(max_turns),
         "--max-budget-usd", f"{max_budget:.2f}",
-        prompt,
     ]
+    env = {
+        **subprocess.os.environ,
+        "DISABLE_OMC": "1",
+        "OMC_SKIP_HOOKS": "SessionStart,PreToolUse,PostToolUse",
+        "CLAUDE_CODE_DISABLE_NONINTERACTIVE_AUTO_MEMORY": "1",
+    }
     try:
         proc = subprocess.run(
             cmd,
+            input=prompt,
             capture_output=True,
             text=True,
             timeout=timeout_sec,
+            env=env,
         )
     except subprocess.TimeoutExpired:
         duration = time.monotonic() - start
@@ -180,6 +204,14 @@ def replay_one(prompt: str, model: str, max_budget: float, max_turns: int,
     cost = 0.0
     try:
         o = json.loads(proc.stdout)
+        # Handle array format: find result element
+        if isinstance(o, list):
+            for item in o:
+                if isinstance(item, dict) and item.get("type") == "result":
+                    o = item
+                    break
+            else:
+                o = {}
         cost = float(o.get("total_cost_usd") or 0.0)
     except Exception:
         pass
@@ -201,24 +233,93 @@ def main() -> int:
                     help="claude --model value (haiku/sonnet)")
     ap.add_argument("--max-tasks", type=int, default=10,
                     help="Replay at most N replayable tasks; randomized if benchmark is larger")
-    ap.add_argument("--max-budget-per-task", type=float, default=0.30,
+    ap.add_argument("--max-budget-per-task", type=float, default=1.00,
                     help="Per-task USD cap passed to claude --max-budget-usd")
-    ap.add_argument("--total-budget", type=float, default=2.00,
+    ap.add_argument("--total-budget", type=float, default=5.00,
                     help="Stop early if cumulative cost exceeds this")
     ap.add_argument("--max-turns", type=int, default=12)
-    ap.add_argument("--timeout-sec", type=int, default=180,
+    ap.add_argument("--timeout-sec", type=int, default=300,
                     help="Per-task wall-clock timeout")
+    ap.add_argument("--max-duration", type=float, default=None,
+                    help="Skip tasks whose ground_truth.duration_sec exceeds this (default: timeout-sec * 1.5)")
+    ap.add_argument("--since", type=str, default=None,
+                    help="Only replay tasks with first_message_at >= YYYY-MM-DD")
+    ap.add_argument("--until", type=str, default=None,
+                    help="Only replay tasks with first_message_at <= YYYY-MM-DD (inclusive, end of day)")
+    ap.add_argument("--min-scorable", type=int, default=None,
+                    help="Adaptive window: if fewer than N tasks pass all filters, widen --since backward 7 days at a time until met")
+    ap.add_argument("--skip-if-ran", action="store_true",
+                    help="Skip this run if the same date window was already replayed (checks run-history.jsonl)")
     ap.add_argument("--seed", type=int, default=42)
     args = ap.parse_args()
 
     if not args.benchmark.exists():
         print(f"benchmark missing: {args.benchmark}", file=sys.stderr)
         return 2
+
+    # Check run history to skip duplicate date windows
+    run_history_path = args.benchmark.parent / "run-history.jsonl"
+    if args.skip_if_ran and run_history_path.exists():
+        window_key = f"{args.since or '*'}:{args.until or '*'}"
+        for line in run_history_path.read_text(encoding="utf-8").splitlines():
+            try:
+                entry = json.loads(line)
+                if entry.get("window") == window_key:
+                    print(f"skip: window {window_key} already ran on {entry.get('timestamp','?')[:10]} "
+                          f"(run_dir={entry.get('run_dir','')})")
+                    return 0
+            except Exception:
+                continue
+
     args.run_dir.mkdir(parents=True, exist_ok=True)
 
     bench = [e for e in load_benchmark(args.benchmark) if e.get("replayable")]
+
+    def _in_range(entry: dict) -> bool:
+        ts = (entry.get("first_message_at") or "")[:10]
+        if not ts:
+            return False
+        if args.since and ts < args.since:
+            return False
+        if args.until and ts > args.until:
+            return False
+        return True
+
+    if args.since or args.until:
+        before = len(bench)
+        bench = [e for e in bench if _in_range(e)]
+        print(f"date filter: {before} -> {len(bench)} tasks (since={args.since}, until={args.until})")
     if not bench:
         print("no replayable benchmark entries — nothing to replay", file=sys.stderr)
+        return 0
+
+    # Duration filter: skip tasks that are physically impossible to complete in timeout
+    max_dur = args.max_duration if args.max_duration is not None else args.timeout_sec * 1.5
+    before_dur = len(bench)
+    bench = [e for e in bench if (e.get("ground_truth", {}).get("duration_sec") or 0) <= max_dur]
+    if len(bench) < before_dur:
+        print(f"duration filter: {before_dur} -> {len(bench)} tasks (max_duration={max_dur:.0f}s)")
+
+    # Adaptive window: widen --since backward if not enough scorable tasks
+    if args.min_scorable and args.since and len(bench) < args.min_scorable:
+        from datetime import datetime, timedelta
+        original_since = args.since
+        all_replayable = [e for e in load_benchmark(args.benchmark) if e.get("replayable")]
+        for _ in range(4):  # max 4 expansions (28 days back)
+            dt = datetime.strptime(args.since, "%Y-%m-%d") - timedelta(days=7)
+            args.since = dt.strftime("%Y-%m-%d")
+            expanded = [e for e in all_replayable if _in_range(e)]
+            expanded = [e for e in expanded if (e.get("ground_truth", {}).get("duration_sec") or 0) <= max_dur]
+            if len(expanded) >= args.min_scorable:
+                bench = expanded
+                break
+        if len(bench) >= args.min_scorable:
+            print(f"adaptive window: widened since {original_since} -> {args.since} ({len(bench)} scorable tasks)")
+        else:
+            print(f"adaptive window: could not reach {args.min_scorable} tasks (got {len(bench)}, since={args.since})")
+
+    if not bench:
+        print("no tasks within duration limit — nothing to replay", file=sys.stderr)
         return 0
 
     # Deterministic subsample
@@ -309,6 +410,21 @@ def main() -> int:
           f"cost=${summary['total_cost_usd']:.2f}"
           f"{' (stopped-early on budget)' if summary['stopped_early'] else ''}")
     print(f"summary: {summary_path}")
+
+    # Record this run in history to support --skip-if-ran
+    from datetime import datetime as _dt, timezone as _tz
+    history_entry = {
+        "window": f"{args.since or '*'}:{args.until or '*'}",
+        "timestamp": _dt.now(_tz.utc).isoformat(),
+        "run_dir": str(args.run_dir),
+        "n_attempted": summary["n_attempted"],
+        "n_completed": summary["n_completed"],
+        "cost_usd": summary["total_cost_usd"],
+    }
+    run_history_path = args.benchmark.parent / "run-history.jsonl"
+    with run_history_path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(history_entry) + "\n")
+
     return 0
 
 
