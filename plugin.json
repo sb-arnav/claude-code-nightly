@@ -1,0 +1,7 @@
+{
+  "name": "nightly",
+  "version": "1.0.0",
+  "description": "Nightly self-improvement loop for Claude Code",
+  "commands": ["commands/nightly.md"],
+  "hooks": []
+}
