@@ -248,12 +248,29 @@ def main() -> int:
                     help="Only replay tasks with first_message_at <= YYYY-MM-DD (inclusive, end of day)")
     ap.add_argument("--min-scorable", type=int, default=None,
                     help="Adaptive window: if fewer than N tasks pass all filters, widen --since backward 7 days at a time until met")
+    ap.add_argument("--skip-if-ran", action="store_true",
+                    help="Skip this run if the same date window was already replayed (checks run-history.jsonl)")
     ap.add_argument("--seed", type=int, default=42)
     args = ap.parse_args()
 
     if not args.benchmark.exists():
         print(f"benchmark missing: {args.benchmark}", file=sys.stderr)
         return 2
+
+    # Check run history to skip duplicate date windows
+    run_history_path = args.benchmark.parent / "run-history.jsonl"
+    if args.skip_if_ran and run_history_path.exists():
+        window_key = f"{args.since or '*'}:{args.until or '*'}"
+        for line in run_history_path.read_text(encoding="utf-8").splitlines():
+            try:
+                entry = json.loads(line)
+                if entry.get("window") == window_key:
+                    print(f"skip: window {window_key} already ran on {entry.get('timestamp','?')[:10]} "
+                          f"(run_dir={entry.get('run_dir','')})")
+                    return 0
+            except Exception:
+                continue
+
     args.run_dir.mkdir(parents=True, exist_ok=True)
 
     bench = [e for e in load_benchmark(args.benchmark) if e.get("replayable")]
@@ -393,6 +410,21 @@ def main() -> int:
           f"cost=${summary['total_cost_usd']:.2f}"
           f"{' (stopped-early on budget)' if summary['stopped_early'] else ''}")
     print(f"summary: {summary_path}")
+
+    # Record this run in history to support --skip-if-ran
+    from datetime import datetime as _dt, timezone as _tz
+    history_entry = {
+        "window": f"{args.since or '*'}:{args.until or '*'}",
+        "timestamp": _dt.now(_tz.utc).isoformat(),
+        "run_dir": str(args.run_dir),
+        "n_attempted": summary["n_attempted"],
+        "n_completed": summary["n_completed"],
+        "cost_usd": summary["total_cost_usd"],
+    }
+    run_history_path = args.benchmark.parent / "run-history.jsonl"
+    with run_history_path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(history_entry) + "\n")
+
     return 0
 
 
