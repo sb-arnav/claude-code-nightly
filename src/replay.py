@@ -240,6 +240,8 @@ def main() -> int:
     ap.add_argument("--max-turns", type=int, default=12)
     ap.add_argument("--timeout-sec", type=int, default=300,
                     help="Per-task wall-clock timeout")
+    ap.add_argument("--max-duration", type=float, default=None,
+                    help="Skip tasks whose ground_truth.duration_sec exceeds this (default: timeout-sec * 1.5)")
     ap.add_argument("--since", type=str, default=None,
                     help="Only replay tasks with first_message_at >= YYYY-MM-DD")
     ap.add_argument("--until", type=str, default=None,
@@ -269,6 +271,16 @@ def main() -> int:
         print(f"date filter: {before} -> {len(bench)} tasks (since={args.since}, until={args.until})")
     if not bench:
         print("no replayable benchmark entries — nothing to replay", file=sys.stderr)
+        return 0
+
+    # Duration filter: skip tasks that are physically impossible to complete in timeout
+    max_dur = args.max_duration if args.max_duration is not None else args.timeout_sec * 1.5
+    before_dur = len(bench)
+    bench = [e for e in bench if (e.get("ground_truth", {}).get("duration_sec") or 0) <= max_dur]
+    if len(bench) < before_dur:
+        print(f"duration filter: {before_dur} -> {len(bench)} tasks (max_duration={max_dur:.0f}s)")
+    if not bench:
+        print("no tasks within duration limit — nothing to replay", file=sys.stderr)
         return 0
 
     # Deterministic subsample
